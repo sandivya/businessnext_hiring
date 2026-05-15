@@ -158,7 +158,8 @@ Configure the runtime:
 
 ```powershell
 .\deploy\agentcore\configure.ps1 `
-  -ExecutionRoleArn "arn:aws:iam::<account-id>:role/<agentcore-runtime-role>"
+  -AccountId "<account-id>" `
+  -Region "ap-south-1"
 ```
 
 Deploy:

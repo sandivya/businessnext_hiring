@@ -1,16 +1,44 @@
 [CmdletBinding()]
 param(
+    [string]$Target = "default",
+    [string]$AccountId = "440744216711",
     [string]$Region = "ap-south-1",
-    [string]$LogLevel = "INFO",
-    [bool]$UseFakeModel = $false
+    [switch]$DryRun,
+    [switch]$Diff,
+    [switch]$VerboseEvents,
+    [switch]$SkipBootstrap
 )
 
 $ErrorActionPreference = "Stop"
 
-$fakeModel = $UseFakeModel.ToString().ToLowerInvariant()
+Push-Location "agentcore/cdk"
+try {
+    if (-not (Test-Path -LiteralPath "node_modules")) {
+        npm install
+    }
 
-& agentcore deploy `
-    --env "BUSINESSNEXT_AWS_REGION=$Region" `
-    --env "BUSINESSNEXT_BEDROCK_MODEL_ID=openai.gpt-oss-safeguard-120b" `
-    --env "BUSINESSNEXT_USE_FAKE_MODEL=$fakeModel" `
-    --env "BUSINESSNEXT_LOG_LEVEL=$LogLevel"
+    if (-not $SkipBootstrap) {
+        & .\node_modules\.bin\cdk.cmd bootstrap "aws://$AccountId/$Region" --require-approval never --no-bootstrap-customer-key
+    }
+}
+finally {
+    Pop-Location
+}
+
+& agentcore package
+
+$arguments = @("deploy", "--target", $Target, "--yes")
+
+if ($DryRun) {
+    $arguments += "--dry-run"
+}
+
+if ($Diff) {
+    $arguments += "--diff"
+}
+
+if ($VerboseEvents) {
+    $arguments += "--verbose"
+}
+
+& agentcore @arguments

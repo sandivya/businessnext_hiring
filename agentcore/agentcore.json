@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "BizNextLoanAgent",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "BizNextLoanAgent"
+  },
+  "runtimes": [
+    {
+      "name": "BusinessNextLoanAgent",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "./",
+      "runtimeVersion": "PYTHON_3_14",
+      "envVars": [
+        {
+          "name": "BUSINESSNEXT_AWS_REGION",
+          "value": "ap-south-1"
+        },
+        {
+          "name": "BUSINESSNEXT_BEDROCK_MODEL_ID",
+          "value": "openai.gpt-oss-safeguard-120b"
+        },
+        {
+          "name": "BUSINESSNEXT_USE_FAKE_MODEL",
+          "value": "false"
+        },
+        {
+          "name": "BUSINESSNEXT_LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "BUSINESSNEXT_DATABASE_PATH",
+          "value": "/tmp/businessnext/businessnext.db"
+        }
+      ],
+      "networkMode": "PUBLIC",
+      "instrumentation": {
+        "enableOtel": true
+      },
+      "protocol": "HTTP",
+      "authorizerType": "AWS_IAM",
+      "lifecycleConfiguration": {
+        "idleRuntimeSessionTimeout": 900,
+        "maxLifetime": 3600
+      }
+    }
+  ],
+  "memories": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "httpGateways": []
+}
