@@ -1,0 +1,47 @@
+[project]
+name = "businessnext-loan-agent"
+version = "0.1.0"
+description = "Prompt-only AgentCore personal loan outreach agent"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "bedrock-agentcore>=0.1.0",
+    "boto3>=1.40.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "strands-agents>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "PL", "RUF"]
+ignore = ["PLC0415", "PLR0911", "PLR0913", "PLR2004"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src/businessnext_agent --cov-report=term-missing --cov-fail-under=100"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src/businessnext_agent"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "pragma: no cover",
+]
