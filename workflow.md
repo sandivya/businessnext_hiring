@@ -1,6 +1,6 @@
 # Agent Workflow
 
-This document shows how the prompt-only AgentCore agent moves from a business request to an approved customer shortlist and safe outreach drafts.
+This document shows how the prompt-only AgentCore agent moves from a business request to a policy-validated route, approved customer shortlist, and safe outreach drafts.
 
 ## End-To-End Flow
 
@@ -8,23 +8,26 @@ This document shows how the prompt-only AgentCore agent moves from a business re
 flowchart TD
     Start([User sends prompt]) --> Runtime[AgentCore Runtime / main.py]
     Runtime --> Validate[Validate AgentRequest]
-    Validate --> Help{Help, catalog, or workflow?}
+    Validate --> Route[Create AgentPlan]
+    Route --> Policy[Validate plan and risk flags]
+    Policy --> Help{Help, catalog, approval, or workflow?}
 
     Help -->|Help / unclear| Capabilities[Show capabilities, examples, fields, checks, message styles]
     Help -->|Catalog prompt| Catalog[Show requested catalog]
-    Help -->|Campaign prompt| SelectionApproval[Ask approval for customer selection]
+    Help -->|Campaign prompt| SelectionApproval[Ask approval to evaluate selected customers]
 
     SelectionApproval --> SelectionToken[Return approval token]
     SelectionToken --> SelectionApproved{approve token?}
     SelectionApproved -->|No| Reminder[Remind user what approval is pending]
-    SelectionApproved -->|Yes| SelectCustomers[Select customers using available fields and direct intent signals]
+    SelectionApproved -->|Yes| SelectCustomers[Use selected customers from available fields and direct intent signals]
 
     SelectCustomers --> CheckApproval[Ask approval for checks to run]
     CheckApproval --> CheckApproved{approve token and optional rule IDs?}
     CheckApproved -->|No| Reminder
     CheckApproved -->|Yes| Score[Run hard filters, selected scoring checks, likelihood, and recommendation]
 
-    Score --> ShortlistApproval[Ask user to accept shortlist]
+    Score --> EligibleOnly[Keep hard-filter failures out of outreach shortlist]
+    EligibleOnly --> ShortlistApproval[Ask user to accept eligible shortlist]
     ShortlistApproval --> ShortlistApproved{approve token?}
     ShortlistApproved -->|No| Reminder
     ShortlistApproved -->|Yes| StyleChoice[Show message styles and request tone approval]
@@ -44,6 +47,8 @@ flowchart TD
     FinalApproved -->|Yes| Done([Return final approved outreach package])
 
     Runtime --> Logs[Structured JSON logs]
+    Route --> RouteMeta[agentic_route metadata]
+    Policy --> RouteAudit[agentic_route_selected event]
     SelectCustomers --> Events[Workflow events]
     Score --> Events
     Draft --> Events
@@ -56,15 +61,15 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> Ready
-    Ready --> CustomerSelectionApproval: campaign prompt
-    CustomerSelectionApproval --> CheckSelectionApproval: approve token
+    Ready --> CustomerEvaluationApproval: campaign prompt
+    CustomerEvaluationApproval --> CheckSelectionApproval: approve token
     CheckSelectionApproval --> ShortlistAcceptanceApproval: approve token / optional check IDs
     ShortlistAcceptanceApproval --> MessageStyleApproval: approve token
     MessageStyleApproval --> BedrockDraftingApproval: approve token + tone
     BedrockDraftingApproval --> FinalMessagesApproval: approve token
     FinalMessagesApproval --> Completed: approve token
 
-    CustomerSelectionApproval --> CustomerSelectionApproval: missing/invalid token
+    CustomerEvaluationApproval --> CustomerEvaluationApproval: missing/invalid token
     CheckSelectionApproval --> CheckSelectionApproval: missing/invalid token
     ShortlistAcceptanceApproval --> ShortlistAcceptanceApproval: missing/invalid token
     MessageStyleApproval --> MessageStyleApproval: missing tone or token
@@ -82,6 +87,8 @@ sequenceDiagram
     actor User
     participant AC as AgentCore Runtime
     participant Main as main.py
+    participant Router as GovernedAgentOrchestrator
+    participant Policy as AgentPolicy
     participant WF as WorkflowService
     participant Repo as SQLiteStore
     participant Rules as ScoringEngine
@@ -92,20 +99,25 @@ sequenceDiagram
 
     User->>AC: {"prompt": "Find high-value customers likely to convert"}
     AC->>Main: Invoke entrypoint
-    Main->>WF: AgentRequest
+    Main->>Router: AgentRequest
+    Router->>Policy: AgentPlan validation
+    Router->>WF: run_workflow_prompt tool
     WF->>Repo: Load or create session
+    WF->>Repo: Emit agentic_route_selected event when session exists
     WF->>Repo: Emit approval_requested event
     WF-->>User: needs_approval + approval_token
     WF->>Obs: request/session/latency/status log
 
     User->>AC: {"session_id": "...", "prompt": "approve <token>"}
     AC->>Main: Invoke entrypoint
-    Main->>WF: AgentRequest
+    Main->>Router: approval continuation
+    Router->>Policy: validate approval route
+    Router->>WF: run_workflow_prompt tool
     WF->>Repo: Load session
     WF->>Rules: Evaluate hard filters and scoring checks
     Rules-->>WF: ranked evaluations with explanations
     WF->>Repo: Persist state and workflow events
-    WF-->>User: shortlist + next approval token
+    WF-->>User: eligible shortlist, exclusion summary + next approval token
 
     User->>AC: approve style and drafting tokens
     WF->>Msg: Build safe prompt and fallback message

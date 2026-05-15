@@ -12,6 +12,7 @@ V1 is prompt-only through Bedrock AgentCore Runtime. A future frontend should be
 2. Activity timeline
    - Renders workflow events returned by the backend.
    - Expected event types include:
+     - `agentic_route_selected`
      - `capabilities_shown`
      - `fields_catalog_shown`
      - `checks_proposed`
@@ -24,6 +25,11 @@ V1 is prompt-only through Bedrock AgentCore Runtime. A future frontend should be
 3. Review panel
    - Renders shortlisted customers, checks, recommendations, and drafted messages.
    - Uses `structured_result` rather than parsing the natural-language `message`.
+
+4. Agent route panel
+   - Optional reviewer/admin view.
+   - Renders `structured_result.agentic_route.intent`, `tool_name`, `extracted_filters`, and `risk_flags`.
+   - Helps explain why the agent chose a catalog response, approval continuation, or campaign workflow.
 
 ## Future API Adapter
 

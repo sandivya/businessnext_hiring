@@ -57,6 +57,10 @@ def test_full_guided_workflow_with_approvals(service) -> None:
     assert shortlist.status == ResponseStatus.NEEDS_APPROVAL
     assert shortlist.events[0].event_type == "customers_evaluated"
     assert shortlist.structured_result["top_customers"]
+    assert all(
+        customer["priority"] != "EXCLUDED"
+        for customer in shortlist.structured_result["top_customers"]
+    )
     assert shortlist.structured_result["selected_check_ids"] == ["INT001", "CRD001"]
 
     style = service.handle(
@@ -97,12 +101,16 @@ def test_selection_helpers(service) -> None:
     preferred_ids = service._select_customers("preferred customers")
     both_ids = service._select_customers("premium preferred customers")
     mumbai_ids = service._select_customers("premium customers in mumbai with bureau score 740")
+    cibil_ids = service._select_customers("customers with cibil above 740")
+    relationship_ids = service._select_customers("customers with relationship value above 5 lakh")
     salaried_ids = service._select_customers("salaried customers")
     no_match_ids = service._select_customers("customers with bureau score 999999")
     assert premium_ids
     assert preferred_ids
     assert isinstance(both_ids, list)
     assert isinstance(mumbai_ids, list)
+    assert cibil_ids
+    assert relationship_ids
     assert salaried_ids
     assert no_match_ids == []
     assert service._extract_tone("please use crisp digital") == "crisp_digital"
@@ -112,6 +120,14 @@ def test_selection_helpers(service) -> None:
         "self employed",
     }
     assert service._threshold_after("bureau score above 760", ["bureau score"]) == 760
+    assert (
+        service._threshold_after("relationship value above 5 lakh", ["relationship value"])
+        == 500000
+    )
+    assert (
+        service._threshold_after("relationship value above 1.5 cr", ["relationship value"])
+        == 15000000
+    )
     assert service._selection_summary("premium customers in mumbai", premium_ids)
 
 
@@ -131,3 +147,22 @@ def test_empty_shortlist_and_service_helpers(service) -> None:
     assert response.structured_result["top_customers"] == []
     assert service.strands_tools()
     service.close()
+
+
+def test_excluded_customers_do_not_advance_to_outreach_shortlist(service) -> None:
+    engine = service._scoring_engine()
+    excluded_ids = [
+        customer["customer_id"]
+        for customer in service.store.list_customers()
+        if not engine.evaluate_customer(customer).eligible
+    ][:3]
+    state = SessionState(
+        session_id="only-excluded",
+        selected_customer_ids=excluded_ids,
+        selected_check_ids=["INT001"],
+    )
+    response = service._after_check_selection(state)
+    assert response.status == ResponseStatus.NEEDS_CLARIFICATION
+    assert response.structured_result["top_customers"] == []
+    assert response.structured_result["excluded_count"] == len(excluded_ids)
+    assert response.structured_result["excluded_customers"]

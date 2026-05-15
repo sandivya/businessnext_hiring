@@ -28,10 +28,19 @@ class Settings(BaseSettings):
     )
     aws_region: str = "ap-south-1"
     bedrock_model_id: str = "openai.gpt-oss-safeguard-120b"
+    agent_system_prompt_path: Path = Field(default=ROOT_DIR / "agent.md")
+    agent_id: str = "businessnext-personal-loan-agent"
+    agent_name: str = "BusinessNext Personal Loan Outreach Agent"
+    agent_description: str = (
+        "Governed personal-loan campaign agent with HITL approvals, explainable "
+        "shortlisting, and safe message drafting."
+    )
     bedrock_max_concurrency: int = 3
     model_retry_max_attempts: int = 3
     model_retry_initial_delay_seconds: int = 2
     model_retry_max_delay_seconds: int = 30
+    conversation_window_size: int = 20
+    conversation_management_per_turn: bool = True
     log_level: str = "INFO"
     use_fake_model: bool = False
 

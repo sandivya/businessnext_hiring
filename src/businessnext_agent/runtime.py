@@ -20,6 +20,7 @@ from businessnext_agent.infrastructure.observability import (
 )
 from businessnext_agent.infrastructure.repository import SQLiteStore
 from businessnext_agent.orchestration.agent_tools import build_workflow_tools
+from businessnext_agent.orchestration.router import GovernedAgentOrchestrator
 from businessnext_agent.schemas import AgentRequest, AgentResponse, ResponseStatus, WorkflowEvent
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,23 @@ def build_model_retry_strategy(settings: Settings) -> Any:
     )
 
 
+def load_agent_system_prompt(settings: Settings) -> str:
+    """Load the Strands system prompt used by live agent instances."""
+
+    try:
+        return settings.agent_system_prompt_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        logger.warning(
+            "Agent system prompt file not found: %s",
+            settings.agent_system_prompt_path,
+            extra={"error_type": "FileNotFoundError"},
+        )
+        return (
+            "You are a governed personal-loan outreach agent. Follow human approval "
+            "requirements, use configured tools, and never bypass compliance checks."
+        )
+
+
 def default_strands_agent_factory(
     settings: Settings,
     tools: list[Any] | None = None,
@@ -50,7 +68,9 @@ def default_strands_agent_factory(
     """Create the live Strands Bedrock agent lazily, only when drafting is approved."""
 
     from strands import Agent
+    from strands.agent.conversation_manager import SlidingWindowConversationManager
     from strands.models import BedrockModel
+    from strands.types.agent import ConcurrentInvocationMode
 
     logger.info("Creating Strands Bedrock agent for model %s", settings.bedrock_model_id)
     model = BedrockModel(
@@ -62,8 +82,28 @@ def default_strands_agent_factory(
     return Agent(
         model=model,
         tools=tools,
+        system_prompt=load_agent_system_prompt(settings),
         callback_handler=None,
+        conversation_manager=SlidingWindowConversationManager(
+            window_size=settings.conversation_window_size,
+            per_turn=settings.conversation_management_per_turn,
+        ),
+        agent_id=settings.agent_id,
+        name=settings.agent_name,
+        description=settings.agent_description,
+        state={
+            "domain": "banking_personal_loan",
+            "approval_policy": "explicit_token_required",
+            "compliance_mode": "deterministic_workflow_controls",
+        },
+        trace_attributes={
+            "app": "businessnext_personal_loan_agent",
+            "runtime": "agentcore",
+            "model_id": settings.bedrock_model_id,
+            "tool_count": len(tools or []),
+        },
         retry_strategy=build_model_retry_strategy(settings),
+        concurrent_invocation_mode=ConcurrentInvocationMode.THROW,
     )
 
 
@@ -114,7 +154,7 @@ def invoke(payload: dict[str, Any], service: WorkflowService | None = None) -> d
             )
             request = AgentRequest.model_validate(payload)
             active_service = service or build_service()
-            response = active_service.handle(request)
+            response = GovernedAgentOrchestrator(active_service).handle(request)
             result = response.model_dump(mode="json")
             latency_ms = _elapsed_ms(started_at)
             _attach_observability(result, request_id, trace_id, latency_ms)

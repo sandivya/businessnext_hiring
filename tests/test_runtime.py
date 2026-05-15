@@ -94,6 +94,15 @@ def test_model_retry_strategy_uses_settings(settings: Settings) -> None:
     assert vars(retry)["_max_delay"] == 9
 
 
+def test_agent_system_prompt_loader(settings: Settings, tmp_path) -> None:
+    prompt_path = tmp_path / "agent.md"
+    prompt_path.write_text("system instructions", encoding="utf-8")
+    custom = settings.model_copy(update={"agent_system_prompt_path": prompt_path})
+    assert runtime.load_agent_system_prompt(custom) == "system instructions"
+    missing = settings.model_copy(update={"agent_system_prompt_path": tmp_path / "missing.md"})
+    assert "governed personal-loan outreach agent" in runtime.load_agent_system_prompt(missing)
+
+
 def test_orchestrator_agent_and_tool_registry(settings: Settings, service, monkeypatch) -> None:
     def fake_agent_factory(settings_arg: Settings, tools=None):
         return [tool.tool_name for tool in tools]
