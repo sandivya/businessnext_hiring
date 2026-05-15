@@ -29,6 +29,7 @@ from businessnext_agent.schemas import (
 )
 
 CHECK_ID_PATTERN = re.compile(r"\b(?:HF|INT|CRD|TRG|REL|TIM)\d{3}\b", re.IGNORECASE)
+CUSTOMER_ID_PATTERN = re.compile(r"\bCUST\d{4}\b", re.IGNORECASE)
 NUMBER_PATTERN = re.compile(r"\b\d{2,9}\b")
 logger = logging.getLogger(__name__)
 
@@ -280,11 +281,16 @@ class WorkflowService:
             }
             for item in evaluations[:5]
         ]
+        all_evaluations = [item.model_dump(mode="json") for item in evaluations]
         event = self._event(
             state,
             "customers_evaluated",
             "Evaluated and ranked customers.",
-            {"top_customers": summary, "selected_check_ids": state.selected_check_ids},
+            {
+                "top_customers": summary,
+                "evaluation_count": len(all_evaluations),
+                "selected_check_ids": state.selected_check_ids,
+            },
         )
         if not summary:
             return AgentResponse(
@@ -295,6 +301,7 @@ class WorkflowService:
                 events=[event],
                 structured_result={
                     "top_customers": [],
+                    "evaluations": [],
                     "selected_check_ids": state.selected_check_ids,
                 },
             )
@@ -312,6 +319,7 @@ class WorkflowService:
             events=[event],
             structured_result={
                 "top_customers": summary,
+                "evaluations": all_evaluations,
                 "selected_check_ids": state.selected_check_ids,
             },
         )
@@ -433,6 +441,12 @@ class WorkflowService:
 
     def _select_customers(self, prompt_lower: str) -> list[str]:
         customers = self.store.list_customers()
+        explicit_customer_ids = self._extract_customer_ids(prompt_lower)
+        if explicit_customer_ids:
+            available_ids = {customer["customer_id"].upper() for customer in customers}
+            return [
+                customer_id for customer_id in explicit_customer_ids if customer_id in available_ids
+            ]
         segments = self._requested_segments(prompt_lower)
         if segments:
             customers = [
@@ -495,12 +509,15 @@ class WorkflowService:
         return ScoringEngine(self.store.get_rules("shortlisting"), as_of, enabled_rule_ids)
 
     def _requested_missing_fields(self, prompt_lower: str) -> list[str]:
-        requested = {
-            word.strip(" ,.?")
-            for word in prompt_lower.replace("-", "_").split()
-            if "." in word or "_" in word
-        }
         available = available_field_names() | {"first_name", "full_name"}
+        known_prefixes = {field.split(".", 1)[0].split("_", 1)[0] for field in available}
+        requested = set()
+        for word in prompt_lower.replace("-", "_").split():
+            candidate = word.strip(" ,.?")
+            if "." in candidate or (
+                "_" in candidate and candidate.split("_", 1)[0] in known_prefixes
+            ):
+                requested.add(candidate)
         return sorted(requested - available)
 
     def _recommended_tone(self) -> str:
@@ -614,6 +631,16 @@ class WorkflowService:
         }
         extracted = [match.group().upper() for match in CHECK_ID_PATTERN.finditer(prompt_lower)]
         return [rule_id for rule_id in extracted if rule_id in all_ids]
+
+    def _extract_customer_ids(self, prompt_lower: str) -> list[str]:
+        seen: set[str] = set()
+        customer_ids: list[str] = []
+        for match in CUSTOMER_ID_PATTERN.finditer(prompt_lower):
+            customer_id = match.group().upper()
+            if customer_id not in seen:
+                customer_ids.append(customer_id)
+                seen.add(customer_id)
+        return customer_ids
 
     def _has_approval_token(self, prompt_lower: str, token: str | None) -> bool:
         return token is not None and token.lower() in prompt_lower

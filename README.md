@@ -176,6 +176,23 @@ Invoke:
 
 The deployment pack also includes IAM examples and a one-time CloudWatch Transaction Search setup script under `deploy/agentcore`.
 
+## Agentic Dashboard
+
+The repository now includes a Next.js dashboard under `apps/dashboard`. It provides a customer
+grid, guided AgentCore workflow controls, explicit approval buttons, ranked shortlist rendering,
+message-style selection, draft review, and a workflow event timeline.
+
+```powershell
+cd apps\dashboard
+npm install
+copy .env.example .env.local
+npm run dev
+```
+
+Set `AGENTCORE_RUNTIME_ARN`, `AWS_REGION`, and `DASHBOARD_PASSWORD` in `.env.local`. The browser
+talks only to Next.js route handlers; the server-side adapter invokes AgentCore with AWS SDK
+credentials from the local environment or deployment role.
+
 ## Observability
 
 The app emits structured JSON logs to stdout with:

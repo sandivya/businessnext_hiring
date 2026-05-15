@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .coverage
+*.env.local
 htmlcov/
 data/*.db
 data/*.db-shm
@@ -17,3 +18,8 @@ agentcore/cdk/dist/
 agentcore/.cache/
 agentcore/.cli/logs/
 agentcore/.llm-context/
+apps/dashboard/node_modules/
+apps/dashboard/.next/
+apps/dashboard/out/
+apps/dashboard/coverage/
+apps/dashboard/tsconfig.tsbuildinfo
