@@ -54,10 +54,10 @@ describe("Dashboard", () => {
 
     await screen.findByText("Aarav Verma");
     await userEvent.click(screen.getByLabelText("Select Aarav Verma"));
-    await userEvent.click(screen.getByRole("button", { name: /Run selected/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Score selected/ }));
 
     await waitFor(() => expect(screen.getByText("Approve customer selection")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /Approve next step/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Approve cohort evaluation/ })).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 });

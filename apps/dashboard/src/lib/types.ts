@@ -16,6 +16,32 @@ export type AgentResponse = {
   structured_result: Record<string, unknown>;
 };
 
+export type AgenticRoute = {
+  intent: string;
+  tool_name: string;
+  rationale: string;
+  extracted_filters?: Record<string, unknown>;
+  risk_flags?: string[];
+};
+
+export type TopCustomer = {
+  customer_id: string;
+  name: string;
+  score: number;
+  priority: string;
+  likelihood_pct: number;
+  recommended_channel?: string | null;
+  offer_amount?: number | null;
+  next_action?: string;
+  reason_codes?: string[];
+};
+
+export type ExcludedCustomer = {
+  customer_id: string;
+  name: string;
+  failed_hard_filters: string[];
+};
+
 export type CustomerDetailItem = {
   label: string;
   value: string;

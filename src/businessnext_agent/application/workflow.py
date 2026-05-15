@@ -29,6 +29,7 @@ from businessnext_agent.schemas import (
 )
 
 CHECK_ID_PATTERN = re.compile(r"\b(?:HF|INT|CRD|TRG|REL|TIM)\d{3}\b", re.IGNORECASE)
+CUSTOMER_ID_PATTERN = re.compile(r"\bCUST\d{4}\b", re.IGNORECASE)
 NUMBER_PATTERN = re.compile(r"\b\d+(?:\.\d+)?\s*(?:lakh|lac|crore|cr)?\b|\b\d{2,9}\b")
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,7 @@ class WorkflowService:
                 suggested_prompts=["show fields", "Find high-value customers"],
                 events=[event],
                 structured_result={
+                    "workflow_stage": "cohort_selection",
                     "customer_count": 0,
                     "selection_summary": selection_summary,
                     "missing_fields": missing,
@@ -181,6 +183,7 @@ class WorkflowService:
         logger.info("Selected %s customers for session %s", len(selected_ids), state.session_id)
         token = self._set_pending(state, ApprovalStep.CUSTOMER_SELECTION)
         payload = {
+            "workflow_stage": "cohort_selection",
             "customer_count": len(selected_ids),
             "selection_summary": selection_summary,
             "missing_fields": missing,
@@ -253,7 +256,7 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}", "show checks"],
             approval_token=token,
             events=[event],
-            structured_result={"checks": checks},
+            structured_result={"workflow_stage": "check_selection", "checks": checks},
         )
 
     def _after_check_selection(self, state: SessionState) -> AgentResponse:
@@ -288,10 +291,13 @@ class WorkflowService:
                 "score": item.score,
                 "priority": item.priority_band,
                 "likelihood_pct": item.heuristic_likelihood_pct,
+                "recommended_channel": item.recommendation.preferred_channel,
+                "offer_amount": item.recommendation.amount,
+                "next_action": item.recommendation.suggested_action,
+                "reason_codes": [rule.display_name for rule in item.matched_rules[:3]],
             }
             for item in eligible_evaluations[:5]
         ]
-        all_evaluations = [item.model_dump(mode="json") for item in evaluations]
         event = self._event(
             state,
             "customers_evaluated",
@@ -316,6 +322,7 @@ class WorkflowService:
                 events=[event],
                 structured_result={
                     "top_customers": [],
+                    "workflow_stage": "shortlist_review",
                     "excluded_count": len([item for item in evaluations if not item.eligible]),
                     "excluded_customers": excluded_summary,
                     "selected_check_ids": state.selected_check_ids,
@@ -335,6 +342,7 @@ class WorkflowService:
             events=[event],
             structured_result={
                 "top_customers": summary,
+                "workflow_stage": "shortlist_review",
                 "excluded_count": len([item for item in evaluations if not item.eligible]),
                 "excluded_customers": excluded_summary,
                 "selected_check_ids": state.selected_check_ids,
@@ -363,7 +371,11 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}", "warm_assisted", "premium_exclusive"],
             approval_token=token,
             events=[event],
-            structured_result={"styles": styles, "recommended_tone_id": recommended},
+            structured_result={
+                "workflow_stage": "message_style",
+                "styles": styles,
+                "recommended_tone_id": recommended,
+            },
         )
 
     def _after_message_style(self, state: SessionState, prompt_lower: str) -> AgentResponse:
@@ -386,7 +398,10 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}", "show message styles"],
             approval_token=token,
             events=[event],
-            structured_result={"tone_id": state.chosen_tone_id},
+            structured_result={
+                "workflow_stage": "draft_generation",
+                "tone_id": state.chosen_tone_id,
+            },
         )
 
     def _after_bedrock_drafting(self, state: SessionState) -> AgentResponse:
@@ -418,7 +433,10 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}"],
             approval_token=token,
             events=[event],
-            structured_result={"drafts": [draft.model_dump() for draft in state.message_drafts]},
+            structured_result={
+                "workflow_stage": "final_approval",
+                "drafts": [draft.model_dump() for draft in state.message_drafts],
+            },
         )
 
     def _after_final_messages(self, state: SessionState) -> AgentResponse:
@@ -434,7 +452,10 @@ class WorkflowService:
             message="The workflow is complete. The approved message drafts are ready for outreach.",
             suggested_prompts=["Start a new shortlist", "Show message styles"],
             events=[event],
-            structured_result={"drafts": [draft.model_dump() for draft in state.message_drafts]},
+            structured_result={
+                "workflow_stage": "completed",
+                "drafts": [draft.model_dump() for draft in state.message_drafts],
+            },
         )
 
     def _pending_reminder(self, state: SessionState) -> AgentResponse:

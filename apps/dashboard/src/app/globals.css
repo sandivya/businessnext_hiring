@@ -334,6 +334,43 @@ td span {
   gap: 14px;
 }
 
+.pipeline-steps {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pipeline-steps li {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.pipeline-steps span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #435363;
+}
+
+.pipeline-steps li.active {
+  color: var(--teal);
+}
+
+.pipeline-steps li.active span {
+  background: #ccfbf1;
+  color: var(--teal);
+}
+
 .run-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -481,6 +518,87 @@ td span {
   gap: 12px;
 }
 
+.suppression-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.suppression-list article,
+.route-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.suppression-list strong,
+.suppression-list span {
+  display: block;
+}
+
+.suppression-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.suppression-list p {
+  margin: 8px 0 0;
+  color: #435363;
+  font-size: 13px;
+}
+
+.route-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.route-panel dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.route-panel dl div {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 10px;
+}
+
+.route-panel dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.route-panel dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.risk-flags,
+.inline-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.risk-flags span,
+.inline-tags span {
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #435363;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.risk-flags span {
+  background: #fef3c7;
+  color: var(--amber);
+}
+
 .draft-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -537,6 +655,18 @@ td span {
 .drawer h3 {
   margin: 22px 0 10px;
   font-size: 14px;
+}
+
+.ai-recommendation {
+  border: 1px solid var(--line);
+  background: #f0fdfa;
+  border-radius: 8px;
+  margin-top: 18px;
+  padding: 14px;
+}
+
+.ai-recommendation h3 {
+  margin-top: 0;
 }
 
 .drawer dl {
@@ -635,7 +765,12 @@ td span {
 
   .topbar,
   .run-actions,
-  .tone-grid {
+  .tone-grid,
+  .pipeline-steps {
     display: grid;
+  }
+
+  .pipeline-steps {
+    grid-template-columns: repeat(3, 1fr);
   }
 }

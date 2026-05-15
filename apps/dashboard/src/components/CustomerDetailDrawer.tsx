@@ -2,14 +2,16 @@
 
 import { X } from "lucide-react";
 
-import type { CustomerSummary } from "@/lib/types";
+import { formatCurrency } from "@/lib/format";
+import type { CustomerSummary, TopCustomer } from "@/lib/types";
 
 type Props = {
   customer: CustomerSummary | null;
+  recommendation?: TopCustomer;
   onClose: () => void;
 };
 
-export function CustomerDetailDrawer({ customer, onClose }: Props) {
+export function CustomerDetailDrawer({ customer, recommendation, onClose }: Props) {
   if (!customer) {
     return null;
   }
@@ -25,6 +27,22 @@ export function CustomerDetailDrawer({ customer, onClose }: Props) {
             <X size={16} aria-hidden />
           </button>
         </header>
+        {recommendation ? (
+          <section className="ai-recommendation">
+            <h3>AI recommendation</h3>
+            <dl>
+              <div><dt>Priority</dt><dd>{recommendation.priority}</dd></div>
+              <div><dt>Score</dt><dd>{recommendation.score}</dd></div>
+              <div><dt>Likelihood</dt><dd>{recommendation.likelihood_pct}%</dd></div>
+              <div><dt>Offer</dt><dd>{formatCurrency(recommendation.offer_amount)}</dd></div>
+              <div><dt>Channel</dt><dd>{recommendation.recommended_channel ?? "Review"}</dd></div>
+              <div><dt>Next action</dt><dd>{recommendation.next_action ?? "Plan outreach"}</dd></div>
+            </dl>
+            <div className="inline-tags">
+              {(recommendation.reason_codes ?? []).map((reason) => <span key={reason}>{reason}</span>)}
+            </div>
+          </section>
+        ) : null}
         {customer.detailGroups.map((group) => (
           <section key={group.title}>
             <h3>{group.title}</h3>

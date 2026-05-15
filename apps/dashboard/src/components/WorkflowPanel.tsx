@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ListChecks, MessageSquareText, Play } from "lucide-react";
+import { CheckCircle2, FileCheck2, ListChecks, MessageSquareText, Play } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -42,6 +42,7 @@ export function WorkflowPanel({
   const needsToneApproval = Boolean(
     approvalToken && response?.structured_result?.styles && response.status === "needs_approval"
   );
+  const stage = getWorkflowStage(response);
 
   function approve() {
     if (!approvalToken) {
@@ -63,8 +64,23 @@ export function WorkflowPanel({
     <section className="panel-section workflow-panel">
       <div className="section-title">
         <Play size={17} aria-hidden />
-        <h2>Agent workflow</h2>
+        <h2>Campaign workflow</h2>
       </div>
+      <ol className="pipeline-steps" aria-label="Campaign workflow stages">
+        {[
+          "Cohort",
+          "Checks",
+          "Shortlist",
+          "Style",
+          "Drafts",
+          "Final"
+        ].map((label, index) => (
+          <li key={label} className={index <= stage.index ? "active" : ""}>
+            <span>{index + 1}</span>
+            {label}
+          </li>
+        ))}
+      </ol>
       <div className="run-actions">
         <button
           className="primary-action"
@@ -72,11 +88,11 @@ export function WorkflowPanel({
           disabled={loading || selectedCount === 0}
         >
           <Play size={16} aria-hidden />
-          Run selected ({selectedCount})
+          Score selected ({selectedCount})
         </button>
         <button className="secondary-action" onClick={onRunFiltered} disabled={loading}>
           <ListChecks size={16} aria-hidden />
-          Run cohort ({visibleCount})
+          Score cohort ({visibleCount})
         </button>
       </div>
 
@@ -133,8 +149,8 @@ export function WorkflowPanel({
 
       {approvalToken ? (
         <button className="primary-action full-width" onClick={approve} disabled={loading}>
-          <CheckCircle2 size={16} aria-hidden />
-          Approve next step
+          {stage.icon === "file" ? <FileCheck2 size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />}
+          {stage.action}
         </button>
       ) : null}
 
@@ -145,4 +161,43 @@ export function WorkflowPanel({
       </div>
     </section>
   );
+}
+
+function getWorkflowStage(response: AgentResponse | null): { index: number; action: string; icon: "check" | "file" } {
+  const result = response?.structured_result ?? {};
+  const workflowStage = result.workflow_stage;
+  if (workflowStage === "check_selection") {
+    return { index: 1, action: "Run approved checks", icon: "check" };
+  }
+  if (workflowStage === "shortlist_review") {
+    return { index: 2, action: "Accept shortlist", icon: "check" };
+  }
+  if (workflowStage === "message_style") {
+    return { index: 3, action: "Approve outreach style", icon: "check" };
+  }
+  if (workflowStage === "draft_generation") {
+    return { index: 4, action: "Generate message drafts", icon: "file" };
+  }
+  if (workflowStage === "final_approval") {
+    return { index: 5, action: "Finalize outreach package", icon: "file" };
+  }
+  if (!response?.approval_token) {
+    return { index: 0, action: "Approve next step", icon: "check" };
+  }
+  if (result.checks) {
+    return { index: 1, action: "Run approved checks", icon: "check" };
+  }
+  if (result.top_customers) {
+    return { index: 2, action: "Accept shortlist", icon: "check" };
+  }
+  if (result.styles) {
+    return { index: 3, action: "Approve outreach style", icon: "check" };
+  }
+  if (result.tone_id) {
+    return { index: 4, action: "Generate message drafts", icon: "file" };
+  }
+  if (result.drafts) {
+    return { index: 5, action: "Finalize outreach package", icon: "file" };
+  }
+  return { index: 0, action: "Approve cohort evaluation", icon: "check" };
 }

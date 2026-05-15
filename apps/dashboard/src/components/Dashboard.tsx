@@ -28,6 +28,7 @@ import type {
   CatalogResponse,
   CustomerFilters,
   CustomerSummary,
+  TopCustomer,
   WorkflowEvent
 } from "@/lib/types";
 
@@ -52,6 +53,10 @@ export function Dashboard() {
     () => filterCustomers(customers, filters),
     [customers, filters]
   );
+  const recommendations = useMemo(() => {
+    const topCustomers = (response?.structured_result?.top_customers ?? []) as TopCustomer[];
+    return new Map(topCustomers.map((customer) => [customer.customer_id, customer]));
+  }, [response]);
 
   async function loadInitialData() {
     setLoading(true);
@@ -188,7 +193,15 @@ export function Dashboard() {
         </aside>
       </div>
 
-      <CustomerDetailDrawer customer={activeCustomer} onClose={() => setActiveCustomer(null)} />
+      <CustomerDetailDrawer
+        customer={activeCustomer}
+        recommendation={
+          activeCustomer
+            ? recommendations.get(activeCustomer.customerId)
+            : undefined
+        }
+        onClose={() => setActiveCustomer(null)}
+      />
     </main>
   );
 }
