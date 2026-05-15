@@ -1,0 +1,16 @@
+{
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "BusinessNextLoanAgent": {
+            "runtimeId": "BizNextLoanAgent_BusinessNextLoanAgent-gREbPl3rtw",
+            "runtimeArn": "arn:aws:bedrock-agentcore:ap-south-1:440744216711:runtime/BizNextLoanAgent_BusinessNextLoanAgent-gREbPl3rtw",
+            "roleArn": "arn:aws:iam::440744216711:role/AgentCore-BizNextLoanAgen-ApplicationAgentBusinessN-nRO429uIncdj"
+          }
+        },
+        "stackName": "AgentCore-BizNextLoanAgent-default"
+      }
+    }
+  }
+}

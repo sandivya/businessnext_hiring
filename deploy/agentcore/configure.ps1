@@ -1,27 +1,31 @@
 [CmdletBinding()]
 param(
-    [string]$AgentName = "businessnext-loan-agent",
+    [string]$AccountId = "440744216711",
     [string]$Region = "ap-south-1",
-    [string]$ExecutionRoleArn = ""
+    [string]$TargetName = "default"
 )
 
 $ErrorActionPreference = "Stop"
 
-$arguments = @(
-    "configure",
-    "--entrypoint", "main.py",
-    "--name", $AgentName,
-    "--deployment-type", "direct_code_deploy",
-    "--runtime", "PYTHON_3_13",
-    "--region", $Region,
-    "--disable-memory",
-    "--idle-timeout", "900",
-    "--max-lifetime", "3600",
-    "--non-interactive"
+$targetPath = Join-Path (Get-Location) "agentcore/aws-targets.json"
+$targets = @(
+    @{
+        name = $TargetName
+        description = "Default AgentCore deployment target for the hiring project"
+        account = $AccountId
+        region = $Region
+    }
 )
 
-if ($ExecutionRoleArn) {
-    $arguments += @("--execution-role", $ExecutionRoleArn)
+$targets | ConvertTo-Json -Depth 5 | Set-Content -Path $targetPath -Encoding utf8
+
+Push-Location "agentcore/cdk"
+try {
+    npm install
+}
+finally {
+    Pop-Location
 }
 
-& agentcore @arguments
+& agentcore validate
+& agentcore package

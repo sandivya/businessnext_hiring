@@ -9,3 +9,11 @@ data/*.db-shm
 data/*.db-wal
 *.pyc
 *.egg-info/
+agentcore/*.zip
+agentcore/*/staging/
+agentcore/cdk/node_modules/
+agentcore/cdk/cdk.out/
+agentcore/cdk/dist/
+agentcore/.cache/
+agentcore/.cli/logs/
+agentcore/.llm-context/

@@ -1,8 +1,7 @@
 # AgentCore Deployment Pack
 
-This folder contains deployment support files for the prompt-only AgentCore runtime.
-The repository intentionally uses the AgentCore CLI to create the generated
-`agentcore/agentcore.json` file so the project stays aligned with the installed CLI version.
+This folder contains helper scripts for the prompt-only AgentCore runtime. The actual
+AgentCore project config lives in the repo-root `agentcore/` directory.
 
 ## Prerequisites
 
@@ -16,11 +15,12 @@ The repository intentionally uses the AgentCore CLI to create the generated
 
 ```powershell
 .\deploy\agentcore\configure.ps1 `
-  -ExecutionRoleArn "arn:aws:iam::<account-id>:role/<agentcore-runtime-role>"
+  -AccountId "<account-id>" `
+  -Region "ap-south-1"
 ```
 
-If you omit `-ExecutionRoleArn`, the AgentCore CLI can auto-create a runtime role if your
-deployment identity has the required IAM permissions.
+This updates `agentcore/aws-targets.json`, validates the AgentCore project, and packages
+the CodeZip artifact.
 
 ## Deploy
 
@@ -28,10 +28,55 @@ deployment identity has the required IAM permissions.
 .\deploy\agentcore\deploy.ps1
 ```
 
+Use `-DryRun` to preview the deployment:
+
+```powershell
+.\deploy\agentcore\deploy.ps1 -DryRun
+```
+
+The first deploy may bootstrap CDK in the target account. The deployment identity needs
+permissions to create/update/delete the `CDKToolkit` bootstrap stack and create the
+AgentCore runtime resources.
+
+## CDK Bootstrap Troubleshooting
+
+If deployment fails because the `CDKToolkit` stack is in `ROLLBACK_FAILED`, ask an AWS
+administrator to either fix/delete that bootstrap stack or grant temporary CDK bootstrap
+permissions to the deployment identity. At minimum, the user/role needs CloudFormation
+permissions for the bootstrap stack plus the IAM/S3/ECR permissions CDK uses to create
+deployment assets.
+
+For this project, the observed bootstrap blockers were:
+
+- `ecr:CreateRepository` for `cdk-hnb659fds-container-assets-<account-id>-ap-south-1`.
+- SSM Parameter Store write/delete access for `/cdk-bootstrap/hnb659fds/version`.
+- CloudFormation access to recover or delete the failed `CDKToolkit` stack.
+
+After permissions are fixed, clean up the failed bootstrap stack and rerun:
+
+```powershell
+aws cloudformation delete-stack --region ap-south-1 --stack-name CDKToolkit
+.\deploy\agentcore\deploy.ps1
+```
+
 ## Invoke
 
 ```powershell
 .\deploy\agentcore\invoke-help.ps1
+```
+
+The caller that checks status or invokes the deployed runtime needs AgentCore
+runtime permissions:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "bedrock-agentcore:GetAgentRuntime",
+    "bedrock-agentcore:InvokeAgentRuntime"
+  ],
+  "Resource": "arn:aws:bedrock-agentcore:ap-south-1:<account-id>:runtime/*"
+}
 ```
 
 ## Observability

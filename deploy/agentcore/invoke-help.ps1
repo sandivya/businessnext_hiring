@@ -1,12 +1,12 @@
 [CmdletBinding()]
 param(
+    [string]$Prompt = "help",
     [string]$SessionId = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-$payload = @{ prompt = "help" } | ConvertTo-Json -Compress
-$arguments = @("invoke", $payload)
+$arguments = @("invoke", "--runtime", "BusinessNextLoanAgent", $Prompt)
 
 if ($SessionId) {
     $arguments += @("--session-id", $SessionId)

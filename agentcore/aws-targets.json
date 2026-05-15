@@ -1,0 +1,8 @@
+[
+  {
+    "name": "default",
+    "description": "Default AgentCore deployment target for the hiring project",
+    "account": "440744216711",
+    "region": "ap-south-1"
+  }
+]
