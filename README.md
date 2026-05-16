@@ -1,80 +1,82 @@
 # BusinessNext Personal Loan Outreach Agent
 
-Prompt-only Python agent for finding high-value banking customers who are likely to convert for a personal loan this month, explaining the shortlist, and drafting safe personalized outreach after human approval.
+Governed agentic AI app for identifying high-potential bank customers for a personal-loan campaign, explaining the shortlist, and drafting safe outreach only after human approval.
 
-The implementation is designed as a **fully AWS-managed agent runtime**: AgentCore hosts the prompt entrypoint, Bedrock provides the model, IAM controls access, and CloudWatch/AgentCore Observability captures runtime telemetry. The response contract is also structured so a frontend can be added later without changing the core workflow.
+This project is intentionally **not a free-form autonomous agent**. It is a regulated banking design: the agent plans, routes, explains, drafts, and records decisions, while compliance-critical controls such as consent, DND, hard filters, approval tokens, and final outreach remain deterministic.
 
-## What The Agent Can Do
+## Why This Is Agentic
 
-- Explain its capabilities, available data fields, checks, and message styles in plain business language.
-- Select relevant customers from the provided fabricated banking dataset.
-- Run eligibility checks, score customers, estimate conversion likelihood, and recommend a personal-loan outreach action.
-- Ask for human approval before every sensitive step: customer selection, checks, shortlist acceptance, message style, Bedrock drafting, and final messages.
-- Draft personalized but compliant outreach messages using Strands + Bedrock only after approval.
-- Clearly report missing/unavailable fields and suggest closest available data categories.
+- `GovernedAgentOrchestrator` turns each prompt into a bounded `AgentPlan`.
+- `AgentPolicy` validates the plan, corrects tool/intent mismatches, and flags unsafe directives such as approval bypass attempts.
+- Strands-decorated tools expose capabilities, field discovery, check discovery, message styles, and workflow execution.
+- Route decisions are returned in `structured_result.agentic_route` and written to workflow events when a session exists.
+- Route evals test tool selection, approval continuation, prompt normalization, campaign routing, and bypass attempts.
+- Bedrock/Strands drafting uses structured output, retry strategy, system prompt, stable agent identity, trace attributes, state metadata, and sliding-window conversation management.
+
+## What The Agent Does
+
+- Finds candidate customers from the fabricated bank dataset.
+- Runs mandatory hard filters and explainable weighted scoring.
+- Separates eligible outreach candidates from customers excluded by compliance/risk filters.
+- Estimates heuristic conversion likelihood and recommends next outreach action.
+- Requires token-bound human approval before evaluation, checks, shortlist acceptance, message style, Bedrock drafting, and final messages.
+- Drafts personalized messages with sensitive-trigger redaction and safe fallback templates.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    User[Prompt User / AgentCore Invoke] --> Runtime[BedrockAgentCoreApp main.py]
-    Runtime --> Contract[AgentRequest / AgentResponse DTOs]
-    Contract --> Workflow[WorkflowService]
-    Workflow --> Store[(SQLite session, events, seeded data)]
-    Workflow --> Catalog[Capabilities, fields, checks, styles]
-    Workflow --> Rules[Rules + Scoring Engine]
+    User[Prompt User / AgentCore Invoke] --> Runtime[main.py / Bedrock AgentCore]
+    Runtime --> Contract[AgentRequest]
+    Contract --> Router[GovernedAgentOrchestrator]
+    Router --> Plan[AgentPlan]
+    Plan --> Policy[AgentPolicy]
+    Policy --> Tools[Strands Tools]
+    Tools --> Workflow[WorkflowService]
+    Workflow --> Store[(SQLite sessions/events/data)]
+    Workflow --> Rules[ScoringEngine]
     Workflow --> Messaging[MessagingPolicy]
-    Messaging --> Port[MessageModelPort]
-    Port --> Strands[Strands Agent + BedrockModel]
-    Strands --> Bedrock[openai.gpt-oss-safeguard-120b / ap-south-1]
-    Runtime --> Logs[Structured JSON logs]
-    Logs --> CloudWatch[AgentCore / CloudWatch Observability]
+    Messaging --> Strands[Strands Agent]
+    Strands --> Bedrock[Bedrock Model]
+    Runtime --> Logs[JSON Logs / CloudWatch]
 ```
 
-## Architectural Decisions Worth Noting
+## Key Design Choices
 
-These are the main implementation decisions, written plainly:
+- **Governed autonomy over full autonomy:** the agent can plan and route, but cannot bypass compliance.
+- **Schema-first planning:** `AgentPlan` constrains intent, tool name, prompt, extracted filters, rationale, and risk flags.
+- **Policy before execution:** unsafe prompts are flagged before tools run; hard filters always run later in the workflow.
+- **Deterministic core workflow:** this is deliberate for banking auditability.
+- **Hybrid-ready planning:** a model-backed planner can be plugged into `HybridPlanner`; deterministic planning remains the fallback.
+- **Model isolation:** message generation goes through `MessageModelPort`, so Bedrock can be faked in tests and swapped later.
+- **Frontend-ready contract:** responses expose status, approval token, events, structured results, observability, and route metadata.
 
-- **Fully AWS-managed agent path:** the runtime is designed around AgentCore, Bedrock, IAM roles, and CloudWatch rather than a self-hosted API server. That keeps deployment, scaling, security, and observability aligned with AWS managed services.
-- **Strands for AWS-native agent development:** Strands makes it straightforward to define tools, connect to Bedrock models, use AWS-oriented retry behavior, and keep the agent implementation close to AgentCore deployment patterns.
-- **One simple entrypoint:** AgentCore calls only `main.py`. The agent is prompt-first and does not expose many business APIs.
-- **Reusable workflow logic:** `WorkflowService` contains the business flow, so the same logic can be used from AgentCore today and a frontend later.
-- **Clear contracts:** Pydantic models define requests, responses, session state, approvals, evaluations, and message drafts.
-- **Approvals are built in:** the user must approve important steps with a token. The agent does not move ahead on vague replies like "yes" or "continue".
-- **Scoring is explainable:** every shortlisted customer has rule outcomes, score, likelihood, and recommendation rationale.
-- **Bedrock is isolated:** message generation goes through `MessageModelPort`, making the model easy to replace and easy to fake in tests.
-- **Retries use Strands:** live model calls use Strands `ModelRetryStrategy`; after retries fail, the app returns a safe template fallback.
-- **Frontend-ready from day one:** responses include `status`, `approval_token`, `events`, and `structured_result`, so a UI can be added without rewriting the agent.
-- **Observable and privacy-conscious:** logs include request IDs, trace IDs, latency, status, and errors, but not full prompts, customer records, or generated messages.
-- **Storage can be replaced later:** SQLite keeps the project easy to run for review, while the repository layer is the place to switch to DynamoDB or PostgreSQL.
-
-For a visual execution view, see [workflow.md](workflow.md).
+For a deeper hiring-review framing, see [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md). For flow diagrams, see [workflow.md](workflow.md).
 
 ## Source Layout
 
 ```text
 src/businessnext_agent/
-  application/      HITL workflow and use-case orchestration
-  domain/           catalogs, scoring rules, and messaging policy
+  orchestration/    Agent planner, policy, router, route evals, Strands tools
+  application/      HITL workflow and state machine
+  domain/           catalogs, scoring rules, messaging policy
   infrastructure/   SQLite repository and structured observability
-  orchestration/    Strands tool wrappers
-  runtime.py        AgentCore service assembly and invoke contract
-  schemas.py        Shared Pydantic DTOs
-  config.py         Environment-driven settings
+  runtime.py        AgentCore-compatible service assembly
+  schemas.py        Pydantic contracts
 ```
 
 ## Response Contract
 
-AgentCore input:
+Input:
 
 ```json
 {
   "session_id": "optional-session-id",
-  "prompt": "Find high-value customers likely to convert this month"
+  "prompt": "Find high-value customers likely to convert"
 }
 ```
 
-AgentCore output:
+Output:
 
 ```json
 {
@@ -84,36 +86,26 @@ AgentCore output:
   "suggested_prompts": [],
   "approval_token": "only when approval is needed",
   "events": [],
-  "structured_result": {}
+  "structured_result": {
+    "agentic_route": {},
+    "observability": {}
+  }
 }
 ```
-
-`structured_result.observability` includes `request_id`, `trace_id`, and `latency_ms` for runtime correlation.
 
 ## Example Conversation
 
-Start with:
-
 ```json
-{"prompt": "help"}
+{ "prompt": "Find high-value customers likely to convert this month" }
 ```
 
-Then:
+The agent returns `needs_approval` and an approval token.
 
 ```json
-{"prompt": "Find high-value customers likely to convert this month"}
+{ "session_id": "returned-session-id", "prompt": "approve returned-token" }
 ```
 
-The agent returns a short explanation and an approval token. Continue with:
-
-```json
-{
-  "session_id": "returned-session-id",
-  "prompt": "approve returned-token"
-}
-```
-
-To select specific scoring checks:
+For check selection:
 
 ```json
 {
@@ -122,39 +114,42 @@ To select specific scoring checks:
 }
 ```
 
-Hard eligibility filters always run, even when the user selects a smaller scoring set.
+Mandatory hard filters always run, even when the user narrows optional scoring checks.
 
 ## Local Setup
 
 ```powershell
 uv sync --extra dev
-```
-
-For deterministic local runs without Bedrock:
-
-```powershell
 $env:BUSINESSNEXT_USE_FAKE_MODEL = "true"
+uv run pytest
 ```
 
-Invoke locally:
+Local invoke:
 
 ```powershell
 uv run python - <<'PY'
 from businessnext_agent.runtime import invoke
-
 print(invoke({"prompt": "help"}))
 PY
 ```
 
-## AgentCore Deployment
+## Quality Status
 
-Install the AgentCore CLI:
+- Tests: 31
+- Coverage: 100% over `src/businessnext_agent`
+- Lint: `uv run ruff check .`
+- Format: `uv run ruff format --check .`
+- Runtime: AgentCore-compatible `main.py`
+- Deployment assets: `deploy/agentcore`, IAM examples, AgentCore config, CloudWatch setup
 
-```powershell
-npm install -g @aws/agentcore
-```
+## Production Gaps
 
-Configure the runtime:
+- Live AWS smoke test with real AgentCore/Bedrock credentials.
+- Model-backed planner implementation behind `HybridPlanner`.
+- Larger offline eval dataset with regression thresholds.
+- Historical conversion labels for propensity calibration.
+- Production data store such as DynamoDB or PostgreSQL.
+- Security review, CI/CD, and bank compliance sign-off.
 
 ```powershell
 .\deploy\agentcore\configure.ps1 `
@@ -175,6 +170,23 @@ Invoke:
 ```
 
 The deployment pack also includes IAM examples and a one-time CloudWatch Transaction Search setup script under `deploy/agentcore`.
+
+## Agentic Dashboard
+
+The repository now includes a Next.js dashboard under `apps/dashboard`. It provides a customer
+grid, guided AgentCore workflow controls, explicit approval buttons, ranked shortlist rendering,
+message-style selection, draft review, and a workflow event timeline.
+
+```powershell
+cd apps\dashboard
+npm install
+copy .env.example .env.local
+npm run dev
+```
+
+Set `AGENTCORE_RUNTIME_ARN`, `AWS_REGION`, and `DASHBOARD_PASSWORD` in `.env.local`. The browser
+talks only to Next.js route handlers; the server-side adapter invokes AgentCore with AWS SDK
+credentials from the local environment or deployment role.
 
 ## Observability
 
@@ -224,3 +236,4 @@ Current quality status:
 - `deploy/agentcore`: AgentCore deployment scripts and IAM examples.
 - `agent.md`: agent capabilities, HITL policy, and message safety rules.
 - `workflow.md`: visual workflow, approval state machine, and runtime sequence.
+  These are left explicit because the current project is a self-contained hiring PoC, not a bank production deployment.

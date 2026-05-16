@@ -22,6 +22,8 @@ def test_catalogs_and_settings(service) -> None:
     styles = message_style_catalog(service.store.get_rules("messaging"))
     assert {style["tone_id"] for style in styles} >= {"warm_assisted", "premium_exclusive"}
     assert get_settings().aws_region == "ap-south-1"
+    assert get_settings().agent_id == "businessnext-personal-loan-agent"
+    assert get_settings().conversation_window_size == 20
 
 
 def test_repository_seed_and_session_lifecycle(settings) -> None:

@@ -29,7 +29,8 @@ from businessnext_agent.schemas import (
 )
 
 CHECK_ID_PATTERN = re.compile(r"\b(?:HF|INT|CRD|TRG|REL|TIM)\d{3}\b", re.IGNORECASE)
-NUMBER_PATTERN = re.compile(r"\b\d{2,9}\b")
+CUSTOMER_ID_PATTERN = re.compile(r"\bCUST\d{4}\b", re.IGNORECASE)
+NUMBER_PATTERN = re.compile(r"\b\d+(?:\.\d+)?\s*(?:lakh|lac|crore|cr)?\b|\b\d{2,9}\b")
 logger = logging.getLogger(__name__)
 
 
@@ -171,6 +172,7 @@ class WorkflowService:
                 suggested_prompts=["show fields", "Find high-value customers"],
                 events=[event],
                 structured_result={
+                    "workflow_stage": "cohort_selection",
                     "customer_count": 0,
                     "selection_summary": selection_summary,
                     "missing_fields": missing,
@@ -181,6 +183,7 @@ class WorkflowService:
         logger.info("Selected %s customers for session %s", len(selected_ids), state.session_id)
         token = self._set_pending(state, ApprovalStep.CUSTOMER_SELECTION)
         payload = {
+            "workflow_stage": "cohort_selection",
             "customer_count": len(selected_ids),
             "selection_summary": selection_summary,
             "missing_fields": missing,
@@ -253,7 +256,7 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}", "show checks"],
             approval_token=token,
             events=[event],
-            structured_result={"checks": checks},
+            structured_result={"workflow_stage": "check_selection", "checks": checks},
         )
 
     def _after_check_selection(self, state: SessionState) -> AgentResponse:
@@ -263,10 +266,21 @@ class WorkflowService:
         valid_customers = [customer for customer in customers if customer is not None]
         engine = self._scoring_engine(set(state.selected_check_ids))
         evaluations = engine.rank(valid_customers)
+        eligible_evaluations = [item for item in evaluations if item.eligible]
+        excluded_summary = [
+            {
+                "customer_id": item.customer_id,
+                "name": item.full_name,
+                "failed_hard_filters": [rule.display_name for rule in item.failed_hard_filters],
+            }
+            for item in evaluations
+            if not item.eligible
+        ][:5]
         logger.info(
-            "Ranked %s customers with %s selected checks",
+            "Ranked %s customers with %s selected checks; %s eligible",
             len(evaluations),
             len(state.selected_check_ids),
+            len(eligible_evaluations),
         )
         state.evaluations = evaluations
         token = self._set_pending(state, ApprovalStep.SHORTLIST_ACCEPTANCE)
@@ -277,24 +291,40 @@ class WorkflowService:
                 "score": item.score,
                 "priority": item.priority_band,
                 "likelihood_pct": item.heuristic_likelihood_pct,
+                "recommended_channel": item.recommendation.preferred_channel,
+                "offer_amount": item.recommendation.amount,
+                "next_action": item.recommendation.suggested_action,
+                "reason_codes": [rule.display_name for rule in item.matched_rules[:3]],
             }
-            for item in evaluations[:5]
+            for item in eligible_evaluations[:5]
         ]
         event = self._event(
             state,
             "customers_evaluated",
             "Evaluated and ranked customers.",
-            {"top_customers": summary, "selected_check_ids": state.selected_check_ids},
+            {
+                "top_customers": summary,
+                "excluded_count": len([item for item in evaluations if not item.eligible]),
+                "excluded_customers": excluded_summary,
+                "selected_check_ids": state.selected_check_ids,
+            },
         )
         if not summary:
             return AgentResponse(
                 session_id=state.session_id,
                 status=ResponseStatus.NEEDS_CLARIFICATION,
-                message="I could not produce a shortlist from the selected customers and checks.",
+                message=(
+                    "I could not produce an eligible shortlist from the selected customers "
+                    "and checks. Customers that failed mandatory hard filters were excluded "
+                    "from outreach."
+                ),
                 suggested_prompts=["Start a new shortlist", "show fields"],
                 events=[event],
                 structured_result={
                     "top_customers": [],
+                    "workflow_stage": "shortlist_review",
+                    "excluded_count": len([item for item in evaluations if not item.eligible]),
+                    "excluded_customers": excluded_summary,
                     "selected_check_ids": state.selected_check_ids,
                 },
             )
@@ -312,6 +342,9 @@ class WorkflowService:
             events=[event],
             structured_result={
                 "top_customers": summary,
+                "workflow_stage": "shortlist_review",
+                "excluded_count": len([item for item in evaluations if not item.eligible]),
+                "excluded_customers": excluded_summary,
                 "selected_check_ids": state.selected_check_ids,
             },
         )
@@ -332,12 +365,17 @@ class WorkflowService:
             message=(
                 "Choose a message style before drafting. "
                 f"I recommend '{recommended}'. "
-                f"Reply 'approve {token}' to use it, or say a tone id like 'warm_assisted'."
+                f"Reply 'approve {token}' to use it, or reply "
+                f"'approve {token} warm_assisted' to choose a specific tone."
             ),
             suggested_prompts=[f"approve {token}", "warm_assisted", "premium_exclusive"],
             approval_token=token,
             events=[event],
-            structured_result={"styles": styles, "recommended_tone_id": recommended},
+            structured_result={
+                "workflow_stage": "message_style",
+                "styles": styles,
+                "recommended_tone_id": recommended,
+            },
         )
 
     def _after_message_style(self, state: SessionState, prompt_lower: str) -> AgentResponse:
@@ -360,7 +398,10 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}", "show message styles"],
             approval_token=token,
             events=[event],
-            structured_result={"tone_id": state.chosen_tone_id},
+            structured_result={
+                "workflow_stage": "draft_generation",
+                "tone_id": state.chosen_tone_id,
+            },
         )
 
     def _after_bedrock_drafting(self, state: SessionState) -> AgentResponse:
@@ -392,7 +433,10 @@ class WorkflowService:
             suggested_prompts=[f"approve {token}"],
             approval_token=token,
             events=[event],
-            structured_result={"drafts": [draft.model_dump() for draft in state.message_drafts]},
+            structured_result={
+                "workflow_stage": "final_approval",
+                "drafts": [draft.model_dump() for draft in state.message_drafts],
+            },
         )
 
     def _after_final_messages(self, state: SessionState) -> AgentResponse:
@@ -408,7 +452,10 @@ class WorkflowService:
             message="The workflow is complete. The approved message drafts are ready for outreach.",
             suggested_prompts=["Start a new shortlist", "Show message styles"],
             events=[event],
-            structured_result={"drafts": [draft.model_dump() for draft in state.message_drafts]},
+            structured_result={
+                "workflow_stage": "completed",
+                "drafts": [draft.model_dump() for draft in state.message_drafts],
+            },
         )
 
     def _pending_reminder(self, state: SessionState) -> AgentResponse:
@@ -433,6 +480,12 @@ class WorkflowService:
 
     def _select_customers(self, prompt_lower: str) -> list[str]:
         customers = self.store.list_customers()
+        explicit_customer_ids = self._extract_customer_ids(prompt_lower)
+        if explicit_customer_ids:
+            available_ids = {customer["customer_id"].upper() for customer in customers}
+            return [
+                customer_id for customer_id in explicit_customer_ids if customer_id in available_ids
+            ]
         segments = self._requested_segments(prompt_lower)
         if segments:
             customers = [
@@ -464,7 +517,9 @@ class WorkflowService:
                 for customer in customers
                 if customer.get("total_relationship_value", 0) >= relationship_threshold
             ]
-        bureau_threshold = self._threshold_after(prompt_lower, ["bureau score", "credit score"])
+        bureau_threshold = self._threshold_after(
+            prompt_lower, ["bureau score", "credit score", "cibil"]
+        )
         if bureau_threshold is not None:
             customers = [
                 customer
@@ -495,12 +550,15 @@ class WorkflowService:
         return ScoringEngine(self.store.get_rules("shortlisting"), as_of, enabled_rule_ids)
 
     def _requested_missing_fields(self, prompt_lower: str) -> list[str]:
-        requested = {
-            word.strip(" ,.?")
-            for word in prompt_lower.replace("-", "_").split()
-            if "." in word or "_" in word
-        }
         available = available_field_names() | {"first_name", "full_name"}
+        known_prefixes = {field.split(".", 1)[0].split("_", 1)[0] for field in available}
+        requested = set()
+        for word in prompt_lower.replace("-", "_").split():
+            candidate = word.strip(" ,.?")
+            if "." in candidate or (
+                "_" in candidate and candidate.split("_", 1)[0] in known_prefixes
+            ):
+                requested.add(candidate)
         return sorted(requested - available)
 
     def _recommended_tone(self) -> str:
@@ -536,8 +594,17 @@ class WorkflowService:
             suffix = prompt_lower[position + len(label) :]
             match = NUMBER_PATTERN.search(suffix)
             if match:
-                return int(match.group())
+                return self._parse_threshold(match.group())
         return None
+
+    def _parse_threshold(self, value: str) -> int:
+        normalized = value.strip().lower()
+        number = float(re.search(r"\d+(?:\.\d+)?", normalized).group())
+        if "crore" in normalized or normalized.endswith("cr"):
+            return int(number * 10_000_000)
+        if "lakh" in normalized or "lac" in normalized:
+            return int(number * 100_000)
+        return int(number)
 
     def _has_loan_intent(self, customer: dict[str, Any]) -> bool:
         activity = customer.get("digital_loan_activity", {})
@@ -614,6 +681,16 @@ class WorkflowService:
         }
         extracted = [match.group().upper() for match in CHECK_ID_PATTERN.finditer(prompt_lower)]
         return [rule_id for rule_id in extracted if rule_id in all_ids]
+
+    def _extract_customer_ids(self, prompt_lower: str) -> list[str]:
+        seen: set[str] = set()
+        customer_ids: list[str] = []
+        for match in CUSTOMER_ID_PATTERN.finditer(prompt_lower):
+            customer_id = match.group().upper()
+            if customer_id not in seen:
+                customer_ids.append(customer_id)
+                seen.add(customer_id)
+        return customer_ids
 
     def _has_approval_token(self, prompt_lower: str, token: str | None) -> bool:
         return token is not None and token.lower() in prompt_lower

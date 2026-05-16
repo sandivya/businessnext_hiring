@@ -41,6 +41,30 @@ class WorkflowEvent(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class AgentPlan(BaseModel):
+    """Validated plan for one agentic routing turn."""
+
+    intent: Literal[
+        "capability_discovery",
+        "field_catalog",
+        "check_catalog",
+        "message_style_catalog",
+        "approval_continuation",
+        "campaign_workflow",
+    ]
+    tool_name: Literal[
+        "show_capabilities",
+        "show_customer_field_catalog",
+        "show_available_checks",
+        "show_message_styles",
+        "run_workflow_prompt",
+    ]
+    prompt: str
+    rationale: str
+    extracted_filters: dict[str, Any] = Field(default_factory=dict)
+    risk_flags: list[str] = Field(default_factory=list)
+
+
 class AgentResponse(BaseModel):
     """Stable AgentCore output contract."""
 
