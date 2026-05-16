@@ -332,6 +332,35 @@ td span {
   color: #b91c1c;
 }
 
+.intent-cell {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+  max-width: 250px;
+}
+
+.intent-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.intent-signals span {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 160px;
+  min-height: 20px;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #435363;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.25;
+  white-space: normal;
+}
+
 .check-pill:hover::after,
 .check-pill:focus-visible::after {
   content: attr(data-tooltip);

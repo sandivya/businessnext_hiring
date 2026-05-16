@@ -93,16 +93,7 @@ export function CustomerTable({
                   </span>
                 </td>
                 <td>
-                  <span
-                    className={customer.loanIntentSignals.length ? "pill info" : "pill"}
-                    title={
-                      customer.loanIntentSignals.length
-                        ? customer.loanIntentSignals.join(", ")
-                        : "No loan-intent signals"
-                    }
-                  >
-                    {formatIntentSignalCount(customer.loanIntentSignals.length)}
-                  </span>
+                  <IntentSignals signals={customer.loanIntentSignals} />
                 </td>
                 <td>
                   <button
@@ -127,4 +118,21 @@ function formatIntentSignalCount(count: number): string {
     return "No signals";
   }
   return count === 1 ? "1 signal" : `${count} signals`;
+}
+
+function IntentSignals({ signals }: { signals: string[] }) {
+  if (signals.length === 0) {
+    return <span className="pill">No signals</span>;
+  }
+  const visibleSignals = signals.slice(0, 2);
+  const hiddenCount = signals.length - visibleSignals.length;
+  return (
+    <div className="intent-cell" title={signals.join(", ")}>
+      <span className="pill info">{formatIntentSignalCount(signals.length)}</span>
+      <div className="intent-signals">
+        {visibleSignals.map((signal) => <span key={signal}>{signal}</span>)}
+        {hiddenCount > 0 ? <span>+{hiddenCount}</span> : null}
+      </div>
+    </div>
+  );
 }
