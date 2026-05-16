@@ -73,10 +73,40 @@ export function mapCustomerSummary(customer: RawCustomer): CustomerSummary {
       {
         title: "Intent And Contact",
         items: [
-          detail("Application status", activity.loan_application_status),
-          detail("EMI calculator", activity.emi_calculator_last_used_date),
-          detail("Loan page visits", activity.loan_product_page_sessions_30d),
-          detail("Loan inquiry", service.last_loan_related_inquiry_date),
+          detail(
+            "Application status",
+            activity.loan_application_status,
+            activity.loan_application_status === "Started_Not_Submitted"
+              ? "Incomplete application"
+              : undefined
+          ),
+          detail(
+            "EMI calculator",
+            activity.emi_calculator_last_used_date,
+            activity.emi_calculator_last_used_date ? "EMI planning" : undefined
+          ),
+          detail(
+            "Loan page visits",
+            activity.loan_product_page_sessions_30d,
+            Number(activity.loan_product_page_sessions_30d ?? 0) >= 3
+              ? "Loan page visits"
+              : undefined
+          ),
+          detail(
+            "Offer clicked",
+            activity.loan_offer_clicked_date,
+            activity.loan_offer_clicked_date ? "Offer clicked" : undefined
+          ),
+          detail(
+            "Loan inquiry",
+            service.last_loan_related_inquiry_date,
+            service.last_loan_related_inquiry_date ? "Loan inquiry" : undefined
+          ),
+          detail(
+            "Bureau enquiry",
+            credit.personal_loan_bureau_enquiry_date,
+            credit.personal_loan_bureau_enquiry_date ? "Bureau enquiry" : undefined
+          ),
           detail("Preferred channel", customer.preferred_contact_channel)
         ]
       },
@@ -165,7 +195,7 @@ function loanIntentLabels(customer: RawCustomer): string[] {
   return labels;
 }
 
-function detail(label: string, value: unknown) {
+function detail(label: string, value: unknown, intentSignal?: string) {
   return {
     label,
     value:
@@ -173,6 +203,7 @@ function detail(label: string, value: unknown) {
         ? "-"
         : Array.isArray(value)
           ? value.join(", ")
-          : String(value)
+          : String(value),
+    intentSignal
   };
 }

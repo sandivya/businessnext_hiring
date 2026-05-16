@@ -48,6 +48,7 @@ export type ExcludedCustomer = {
 export type CustomerDetailItem = {
   label: string;
   value: string;
+  intentSignal?: string;
 };
 
 export type CustomerDetailGroup = {

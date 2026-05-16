@@ -43,14 +43,32 @@ export function CustomerDetailDrawer({ customer, recommendation, onClose }: Prop
             </div>
           </section>
         ) : null}
+        <section className="intent-summary">
+          <h3>Loan intent evidence</h3>
+          {customer.loanIntentSignals.length > 0 ? (
+            <div className="intent-signals">
+              {customer.loanIntentSignals.map((signal) => <span key={signal}>{signal}</span>)}
+            </div>
+          ) : (
+            <p>No loan-intent evidence found in the available activity fields.</p>
+          )}
+        </section>
         {customer.detailGroups.map((group) => (
           <section key={group.title}>
             <h3>{group.title}</h3>
             <dl>
               {group.items.map((item) => (
-                <div key={item.label}>
+                <div
+                  key={item.label}
+                  className={item.intentSignal ? "intent-source-row" : undefined}
+                >
                   <dt>{item.label}</dt>
-                  <dd>{item.value}</dd>
+                  <dd>
+                    <span>{item.value}</span>
+                    {item.intentSignal ? (
+                      <span className="intent-source-pill">{item.intentSignal}</span>
+                    ) : null}
+                  </dd>
                 </div>
               ))}
             </dl>
