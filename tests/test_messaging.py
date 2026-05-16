@@ -56,6 +56,8 @@ def test_messaging_policy_and_redaction(service) -> None:
     )
     assert drafts
     assert drafts[0].body
+    assert len(drafts[0].body.splitlines()) >= 2
+    assert any(customer["customer_segment"] in drafts[0].body for customer in customers)
     assert drafts[0].tone_id
     assert "Sensitive inferred triggers" in drafts[0].safety_notes[0]
     assert "low balance" not in policy._redact("Your low balance was noticed").lower()
@@ -76,6 +78,49 @@ def test_messaging_policy_discards_model_meta_responses(service) -> None:
     assert drafts
     assert "approval token" not in drafts[0].body.lower()
     assert "approve" not in drafts[0].body.lower()
+    assert len(drafts[0].body.splitlines()) >= 2
+
+
+def test_personalized_fallback_branches(service) -> None:
+    policy = MessagingPolicy(service.store.get_rules("messaging"), FakeMessageModel())
+    evaluation = CustomerEvaluation(
+        customer_id="C1",
+        full_name="Asha Rao",
+        eligible=True,
+        score=72,
+        priority_band="P2",
+        priority_label="Priority 2",
+        heuristic_likelihood_pct=65,
+        recommendation=Recommendation(
+            offer_type="Pre-approved personal loan",
+            suggested_action="Message",
+            amount=400000,
+            preferred_channel=None,
+        ),
+    )
+    customer = {
+        "customer_id": "C1",
+        "full_name": "Asha Rao",
+        "bank_tenure_months": 0,
+        "products_held": [],
+        "digital_loan_activity": {"loan_product_page_sessions_30d": "bad"},
+    }
+    body = policy._personalized_fallback("Hi {{first_name}}", customer, evaluation)
+    assert "banking profile stands out" in body
+    assert "Rs 400,000" in body
+    assert "planned expenses" in body
+    assert body.endswith("Would you like us to share the best tenure and EMI choices?")
+
+    page_visit_body = policy._personalized_fallback(
+        "Hi {{first_name}}",
+        {
+            **customer,
+            "customer_segment": "Preferred",
+            "digital_loan_activity": {"loan_product_page_sessions_30d": 4},
+        },
+        evaluation,
+    )
+    assert "recent loan-page activity" in page_visit_body
 
 
 def test_strands_bedrock_message_model_uses_injected_agent() -> None:

@@ -72,6 +72,16 @@ def _format_amount(amount: float | None) -> str:
     return f"{int(amount):,}"
 
 
+def _plural_months(months: Any) -> str:
+    try:
+        count = int(months)
+    except (TypeError, ValueError):
+        return ""
+    if count <= 0:
+        return ""
+    return f"{count} month{'s' if count != 1 else ''}"
+
+
 class MessagingPolicy:
     """Select templates and redact sensitive trigger language."""
 
@@ -172,7 +182,71 @@ class MessagingPolicy:
             "{{loan_profile.pre_approved_personal_loan_amount}}",
             _format_amount(evaluation.recommendation.amount),
         )
-        return rendered
+        return self._personalized_fallback(rendered, customer, evaluation)
+
+    def _personalized_fallback(
+        self,
+        baseline: str,
+        customer: dict[str, Any],
+        evaluation: CustomerEvaluation,
+    ) -> str:
+        first_name = _first_name(customer["full_name"])
+        greeting = "Dear" if baseline.startswith("Dear ") else "Hi"
+        relationship = self._relationship_line(customer)
+        offer = self._offer_line(evaluation)
+        intent = self._intent_line(customer)
+        cta = self._cta_line(customer, evaluation)
+        lines = [
+            f"{greeting} {first_name}, {relationship}",
+            f"{offer} {intent}".strip(),
+            cta,
+        ]
+        return "\n".join(line for line in lines if line)
+
+    def _relationship_line(self, customer: dict[str, Any]) -> str:
+        segment = customer.get("customer_segment")
+        tenure = _plural_months(customer.get("bank_tenure_months"))
+        products = customer.get("products_held") or []
+        product_text = ""
+        if isinstance(products, list) and products:
+            product_text = f" and your {products[0].lower()} relationship"
+        if segment and tenure:
+            return f"as a {segment} customer with {tenure} of banking history{product_text}, your profile stands out for a personal loan conversation."
+        if segment:
+            return f"as a {segment} customer{product_text}, your profile stands out for a personal loan conversation."
+        return "your banking profile stands out for a personal loan conversation."
+
+    def _offer_line(self, evaluation: CustomerEvaluation) -> str:
+        amount = evaluation.recommendation.amount
+        rate = evaluation.recommendation.rate_pct
+        if amount and rate:
+            return f"You may be eligible for up to Rs {_format_amount(amount)} with rate options around {rate}%."
+        if amount:
+            return f"You may be eligible for up to Rs {_format_amount(amount)} with flexible EMI choices."
+        return "You can explore personal loan options with flexible EMI choices."
+
+    def _intent_line(self, customer: dict[str, Any]) -> str:
+        activity = customer.get("digital_loan_activity", {})
+        service = customer.get("service_interactions", {})
+        if activity.get("loan_application_status") == "Started_Not_Submitted":
+            return "Since your request is already part-way through, we can help you complete it quickly."
+        if service.get("last_loan_related_inquiry_date"):
+            return "Based on your recent enquiry, an RM can help you compare the available options."
+        if activity.get("emi_calculator_last_used_date"):
+            return "You can continue from EMI planning and review a tenure that fits your monthly budget."
+        try:
+            page_sessions = int(activity.get("loan_product_page_sessions_30d") or 0)
+        except (TypeError, ValueError):
+            page_sessions = 0
+        if page_sessions >= 3:
+            return "Your recent loan-page activity suggests this may be a good time to review options."
+        return "It can be useful for planned expenses without disturbing longer-term goals."
+
+    def _cta_line(self, customer: dict[str, Any], evaluation: CustomerEvaluation) -> str:
+        channel = evaluation.recommendation.preferred_channel or customer.get("preferred_contact_channel")
+        if channel:
+            return f"Would you like us to share the best tenure and EMI choices over {channel}?"
+        return "Would you like us to share the best tenure and EMI choices?"
 
     def _draft_prompt(
         self,
@@ -182,10 +256,17 @@ class MessagingPolicy:
         fallback: str,
     ) -> str:
         return (
-            "Draft a concise personal-loan outreach message using the provided safe template. "
+            "Draft a customer-ready personal-loan outreach message in 2 to 3 short lines. "
+            "Make it catchy but credible, with one personalized detail from relationship, offer, "
+            "or safe intent context. Do not include approval instructions, workflow text, markdown, "
+            "tokens, placeholders, or explanations. "
             "Do not mention sensitive inferred triggers such as low balance, medical expenses, "
             "fund redemption, FD closure, or card utilization. "
             f"Customer: {customer['full_name']}. "
+            f"Segment: {customer.get('customer_segment')}. City: {customer.get('city')}. "
+            f"Bank tenure months: {customer.get('bank_tenure_months')}. "
+            f"Preferred channel: {customer.get('preferred_contact_channel')}. "
+            f"Offer amount: {_format_amount(evaluation.recommendation.amount)}. "
             f"Tone: {template['tone']}. Channel: {template['channel']}. "
             f"Evidence: {[rule.display_name for rule in evaluation.matched_rules[:3]]}. "
             f"Safe baseline: {fallback}"

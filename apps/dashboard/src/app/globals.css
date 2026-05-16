@@ -753,6 +753,7 @@ td span {
 .draft-card p {
   margin: 0 0 10px;
   line-height: 1.45;
+  white-space: pre-line;
 }
 
 .drawer-backdrop {
