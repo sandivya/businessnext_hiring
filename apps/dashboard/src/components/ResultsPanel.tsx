@@ -8,6 +8,7 @@ import type {
   AgenticRoute,
   ExcludedCustomer,
   MessageDraft,
+  RuleOutcome,
   TopCustomer
 } from "@/lib/types";
 
@@ -51,6 +52,8 @@ export function ResultsPanel({ response }: Props) {
                   <th>Score</th>
                   <th>Likelihood</th>
                   <th>Priority</th>
+                  <th>Reasons</th>
+                  <th>Checks</th>
                   <th>Channel</th>
                   <th>Offer</th>
                   <th>Next action</th>
@@ -66,6 +69,19 @@ export function ResultsPanel({ response }: Props) {
                     <td>{customer.score}</td>
                     <td>{customer.likelihood_pct}%</td>
                     <td><span className="pill success">{customer.priority}</span></td>
+                    <td>
+                      <div className="table-tags">
+                        {(customer.reason_codes ?? ["Eligible high-potential account"]).map((reason) => (
+                          <span key={reason}>{reason}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      <CheckPills
+                        passed={customer.passed_checks ?? checksFromReasons(customer.reason_codes)}
+                        failed={customer.failed_checks ?? []}
+                      />
+                    </td>
                     <td>{customer.recommended_channel ?? "Review"}</td>
                     <td>{formatCurrency(customer.offer_amount)}</td>
                     <td>{customer.next_action ?? "Plan outreach"}</td>
@@ -79,18 +95,6 @@ export function ResultsPanel({ response }: Props) {
               {selectedCheckIds.map((id) => <span key={id}>{id}</span>)}
             </div>
           ) : null}
-          <div className="reason-grid">
-            {topCustomers.map((customer) => (
-              <article key={`${customer.customer_id}-reasons`}>
-                <strong>{customer.name}</strong>
-                <div className="inline-tags">
-                  {(customer.reason_codes ?? ["Eligible high-potential account"]).map((reason) => (
-                    <span key={reason}>{reason}</span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
         </div>
       ) : null}
 
@@ -105,7 +109,10 @@ export function ResultsPanel({ response }: Props) {
               <article key={customer.customer_id}>
                 <strong>{customer.name}</strong>
                 <span>{customer.customer_id}</span>
-                <p>{customer.failed_hard_filters.join(", ")}</p>
+                <CheckPills
+                  passed={[]}
+                  failed={customer.failed_checks ?? checksFromFailures(customer.failed_hard_filters)}
+                />
               </article>
             ))}
           </div>
@@ -160,4 +167,50 @@ export function ResultsPanel({ response }: Props) {
       ) : null}
     </section>
   );
+}
+
+function CheckPills({ passed, failed }: { passed: RuleOutcome[]; failed: RuleOutcome[] }) {
+  if (passed.length === 0 && failed.length === 0) {
+    return <span className="muted-cell">No check details</span>;
+  }
+  return (
+    <div className="check-pills">
+      {passed.map((check) => <CheckPill key={`pass-${check.rule_id}-${check.display_name}`} check={check} />)}
+      {failed.map((check) => <CheckPill key={`fail-${check.rule_id}-${check.display_name}`} check={check} />)}
+    </div>
+  );
+}
+
+function CheckPill({ check }: { check: RuleOutcome }) {
+  const label = check.rule_id ? `${check.rule_id} ${check.display_name}` : check.display_name;
+  const tooltip = check.reason || check.display_name;
+  return (
+    <span
+      className={`check-pill ${check.passed ? "pass" : "fail"}`}
+      data-tooltip={tooltip}
+      title={tooltip}
+    >
+      {label}
+    </span>
+  );
+}
+
+function checksFromReasons(reasons?: string[]): RuleOutcome[] {
+  return (reasons ?? []).map((reason) => ({
+    rule_id: "",
+    display_name: reason,
+    passed: true,
+    points: 0,
+    reason
+  }));
+}
+
+function checksFromFailures(failures: string[]): RuleOutcome[] {
+  return failures.map((failure) => ({
+    rule_id: "",
+    display_name: failure,
+    passed: false,
+    points: 0,
+    reason: failure
+  }));
 }

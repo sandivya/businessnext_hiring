@@ -272,6 +272,7 @@ class WorkflowService:
                 "customer_id": item.customer_id,
                 "name": item.full_name,
                 "failed_hard_filters": [rule.display_name for rule in item.failed_hard_filters],
+                "failed_checks": [rule.model_dump() for rule in item.failed_hard_filters],
             }
             for item in evaluations
             if not item.eligible
@@ -295,6 +296,8 @@ class WorkflowService:
                 "offer_amount": item.recommendation.amount,
                 "next_action": item.recommendation.suggested_action,
                 "reason_codes": [rule.display_name for rule in item.matched_rules[:3]],
+                "passed_checks": [rule.model_dump() for rule in item.matched_rules],
+                "failed_checks": [rule.model_dump() for rule in item.failed_hard_filters],
             }
             for item in eligible_evaluations[:5]
         ]

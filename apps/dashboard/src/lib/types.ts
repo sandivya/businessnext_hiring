@@ -34,12 +34,15 @@ export type TopCustomer = {
   offer_amount?: number | null;
   next_action?: string;
   reason_codes?: string[];
+  passed_checks?: RuleOutcome[];
+  failed_checks?: RuleOutcome[];
 };
 
 export type ExcludedCustomer = {
   customer_id: string;
   name: string;
   failed_hard_filters: string[];
+  failed_checks?: RuleOutcome[];
 };
 
 export type CustomerDetailItem = {
