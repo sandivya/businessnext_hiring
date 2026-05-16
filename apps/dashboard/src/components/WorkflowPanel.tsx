@@ -81,20 +81,22 @@ export function WorkflowPanel({
           </li>
         ))}
       </ol>
-      <div className="run-actions">
-        <button
-          className="primary-action"
-          onClick={onRunSelected}
-          disabled={loading || selectedCount === 0}
-        >
-          <Play size={16} aria-hidden />
-          Score selected ({selectedCount})
-        </button>
-        <button className="secondary-action" onClick={onRunFiltered} disabled={loading}>
-          <ListChecks size={16} aria-hidden />
-          Score cohort ({visibleCount})
-        </button>
-      </div>
+      {!response ? (
+        <div className="run-actions">
+          <button
+            className="primary-action"
+            onClick={onRunSelected}
+            disabled={loading || selectedCount === 0}
+          >
+            <Play size={16} aria-hidden />
+            Score selected ({selectedCount})
+          </button>
+          <button className="secondary-action" onClick={onRunFiltered} disabled={loading}>
+            <ListChecks size={16} aria-hidden />
+            Score cohort ({visibleCount})
+          </button>
+        </div>
+      ) : null}
 
       {response ? (
         <div className={`agent-response ${response.status}`}>
