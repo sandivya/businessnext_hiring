@@ -1,17 +1,34 @@
 # BusinessNext Personal Loan Outreach Agent
 
-Governed agentic AI app for identifying high-potential bank customers for a personal-loan campaign, explaining the shortlist, and drafting safe outreach only after human approval.
+Governed agentic AI system for identifying high-potential bank customers for a personal-loan campaign, explaining the shortlist, and drafting safe outreach only after human approval.
 
-This project is intentionally **not a free-form autonomous agent**. It is a regulated banking design: the agent plans, routes, explains, drafts, and records decisions, while compliance-critical controls such as consent, DND, hard filters, approval tokens, and final outreach remain deterministic.
+## Design Philosophy: Governed Autonomy
 
-## Why This Is Agentic
+This system is **intentionally not a fully autonomous agent**. In regulated banking, unconstrained LLM planning creates unacceptable risk:
 
-- `GovernedAgentOrchestrator` turns each prompt into a bounded `AgentPlan`.
-- `AgentPolicy` validates the plan, corrects tool/intent mismatches, and flags unsafe directives such as approval bypass attempts.
-- Strands-decorated tools expose capabilities, field discovery, check discovery, message styles, and workflow execution.
-- Route decisions are returned in `structured_result.agentic_route` and written to workflow events when a session exists.
-- Route evals test tool selection, approval continuation, prompt normalization, campaign routing, and bypass attempts.
-- Bedrock/Strands drafting uses structured output, retry strategy, system prompt, stable agent identity, trace attributes, state metadata, and sliding-window conversation management.
+| Fully Autonomous Agent | This System (Governed Agent) |
+|---|---|
+| LLM decides who to contact | LLM helps discover and rank; deterministic policy decides contactability |
+| LLM can skip compliance steps | Consent, DND, KYC, fraud, delinquency checks are **always deterministic** |
+| Approval is optional or implicit | Every major step requires **token-bound human approval** |
+| Planning errors propagate silently | `AgentPolicy` validates every plan before execution; unsafe directives are flagged |
+| Output is opaque | Every decision is explainable: scored rules, matched conditions, exclusion reasons |
+
+### Where the Agent Reasons
+
+- **Intent classification and tool routing** — `GovernedAgentOrchestrator` turns natural-language prompts into schema-validated `AgentPlan` objects with extracted filters, rationale, and risk flags.
+- **Customer selection** — the agent interprets segment, city, employment, threshold, and intent signals from free-text prompts to build dynamic cohorts.
+- **Prompt normalization** — synonyms like "CIBIL" → "credit score" and "top customers" → "high-value customers" are resolved before downstream processing.
+- **Scenario-aware message drafting** — the agent selects outreach scenarios (abandoned application, EMI calculator usage, loan inquiry followup, pre-approved offer, near-closure, liquidity context) and drafts personalized messages through Bedrock with structured output.
+- **Safety filtering** — model outputs are redacted for sensitive triggers and discarded entirely if they contain meta-response leakage.
+
+### Where the Agent Does Not Reason (By Design)
+
+- **Compliance filters** — consent, DND, KYC, fraud, complaints, delinquency, recent repayment. These are **not opinion questions**. They are governed campaign rules enforced deterministically.
+- **Approval gates** — the state machine requires explicit token-bound approval at every stage. Loose confirmations like "yes" or "go ahead" are rejected.
+- **Scoring weights and bands** — configured in auditable JSON rules, not inferred by a model.
+
+This is the architecture pattern expected in production banking AI: **autonomy where it helps, deterministic control where it matters**.
 
 ## What The Agent Does
 
@@ -41,6 +58,36 @@ flowchart TD
     Runtime --> Logs[JSON Logs / CloudWatch]
 ```
 
+## Why the Planner Is Deterministic (And the Extension Point for Model Planning)
+
+The active planner uses structured keyword/intent matching rather than LLM-based planning. This is a deliberate choice for a banking campaign agent:
+
+1. **Auditability** — every routing decision is reproducible and explainable. A regulator or compliance officer can trace exactly why a prompt was routed to a specific tool.
+2. **Latency** — deterministic planning adds zero model-call overhead to the routing layer. The only model call happens during message drafting, after human approval.
+3. **Safety** — prompt-injection attacks against the planner cannot cause the agent to skip compliance checks or bypass approval gates.
+
+The `HybridPlanner` is the extension point: a model-backed `PlannerPort` implementation can be plugged in to handle ambiguous or complex prompts, with the deterministic planner as guaranteed fallback. The policy layer validates any plan — model-generated or deterministic — before execution.
+
+This is the same pattern used in production agentic systems: **constrained planning with policy validation, not unconstrained model reasoning**.
+
+## Why Likelihood Is Heuristic, Not ML
+
+The `heuristic_likelihood_pct` score is a monotonic transform of the weighted rule score. This is intentional:
+
+- **No historical conversion labels were provided.** Training a propensity model on fabricated data would produce false confidence. The heuristic is honest about what it represents: a score-to-likelihood mapping calibrated to priority bands.
+- **Explainability over accuracy.** Every likelihood estimate traces back to named rules with stated conditions. An RM can see *why* a customer scored 78% — not just that they did.
+- **Calibration-ready.** When historical campaign outcomes become available, the `_likelihood` function is the single replacement point. The `CustomerEvaluation` schema, the ranking logic, and the downstream messaging layer do not change.
+
+## Data Integration Architecture
+
+The current implementation uses SQLite with JSON-seeded customer, rule, and messaging data. This is the **correct minimal choice** for a self-contained hiring PoC:
+
+- The `SQLiteStore` repository layer is the **only** component that touches persistence. Swapping to DynamoDB, PostgreSQL, or a CRM API requires implementing the same five methods (`list_customers`, `get_customer`, `get_rules`, `get_session`, `save_session`).
+- Customer data, shortlisting rules, and messaging templates are loaded from separate seed files — the same separation that would exist with separate microservices or API calls.
+- The scoring engine, messaging policy, and workflow service accept plain `dict` customer records. They have **zero coupling** to SQLite.
+
+In a production deployment, `SQLiteStore` would be replaced by a `CRMAdapter` that calls the bank's customer API, a `RulesService` that loads campaign rules from a configuration store, and a `SessionStore` backed by DynamoDB or Redis.
+
 ## Key Design Choices
 
 - **Governed autonomy over full autonomy:** the agent can plan and route, but cannot bypass compliance.
@@ -51,7 +98,7 @@ flowchart TD
 - **Model isolation:** message generation goes through `MessageModelPort`, so Bedrock can be faked in tests and swapped later.
 - **Frontend-ready contract:** responses expose status, approval token, events, structured results, observability, and route metadata.
 
-For a deeper hiring-review framing, see [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md). For flow diagrams, see [workflow.md](workflow.md).
+For a deeper architecture framing, see [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md). For flow diagrams, see [workflow.md](workflow.md).
 
 ## Source Layout
 
@@ -118,79 +165,30 @@ Mandatory hard filters always run, even when the user narrows optional scoring c
 
 ## Local Setup
 
+PowerShell:
+
 ```powershell
 uv sync --extra dev
 $env:BUSINESSNEXT_USE_FAKE_MODEL = "true"
 uv run pytest
 ```
 
+macOS / Linux:
+
+```bash
+uv sync --extra dev
+export BUSINESSNEXT_USE_FAKE_MODEL=true
+uv run pytest
+```
+
 Local invoke:
 
-```powershell
-uv run python - <<'PY'
+```bash
+uv run python -c "
 from businessnext_agent.runtime import invoke
-print(invoke({"prompt": "help"}))
-PY
+print(invoke({'prompt': 'help'}))
+"
 ```
-
-## Quality Status
-
-- Tests: 31
-- Coverage: 100% over `src/businessnext_agent`
-- Lint: `uv run ruff check .`
-- Format: `uv run ruff format --check .`
-- Runtime: AgentCore-compatible `main.py`
-- Deployment assets: `deploy/agentcore`, IAM examples, AgentCore config, CloudWatch setup
-
-## Production Gaps
-
-- Live AWS smoke test with real AgentCore/Bedrock credentials.
-- Model-backed planner implementation behind `HybridPlanner`.
-- Larger offline eval dataset with regression thresholds.
-- Historical conversion labels for propensity calibration.
-- Production data store such as DynamoDB or PostgreSQL.
-- Security review, CI/CD, and bank compliance sign-off.
-
-```powershell
-.\deploy\agentcore\configure.ps1 `
-  -AccountId "<account-id>" `
-  -Region "ap-south-1"
-```
-
-Deploy:
-
-```powershell
-.\deploy\agentcore\deploy.ps1
-```
-
-Invoke:
-
-```powershell
-.\deploy\agentcore\invoke-help.ps1
-```
-
-The deployment pack also includes IAM examples and a one-time CloudWatch Transaction Search setup script under `deploy/agentcore`.
-
-## Agentic Dashboard
-
-The repository now includes a Next.js dashboard under `apps/dashboard`. It provides a customer
-grid, guided AgentCore workflow controls, explicit approval buttons, ranked shortlist rendering,
-message-style selection, draft review, and a workflow event timeline.
-
-```powershell
-cd apps\dashboard
-npm install
-copy .env.example .env.local
-npm run dev
-```
-
-Set `AGENTCORE_RUNTIME_ARN`, `AWS_REGION`, and `DASHBOARD_PASSWORD` in `.env.local`. The browser
-talks only to Next.js route handlers; the server-side adapter invokes AgentCore with AWS SDK
-credentials from the local environment or deployment role.
-
-For a minimal-cost hosted demo, deploy the dashboard on Vercel Hobby with project root
-`apps/dashboard`. See `apps/dashboard/README.md` for the Vercel settings and required
-environment variables.
 
 ## Observability
 
@@ -206,29 +204,59 @@ AgentCore Runtime can add managed OpenTelemetry traces, metrics, and CloudWatch 
 
 The app does not log full prompts, generated customer messages, or raw customer records. It logs prompt length and workflow metadata to reduce PII exposure.
 
-## Product Readiness And Quality
+## Agentic Dashboard
 
-```powershell
+The repository includes a Next.js dashboard under `apps/dashboard`. It provides a customer grid, guided AgentCore workflow controls, explicit approval buttons, ranked shortlist rendering, message-style selection, draft review, and a workflow event timeline.
+
+```bash
+cd apps/dashboard
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Set `AGENTCORE_RUNTIME_ARN`, `AWS_REGION`, and `DASHBOARD_PASSWORD` in `.env.local`. The browser talks only to Next.js route handlers; the server-side adapter invokes AgentCore with AWS SDK credentials from the local environment or deployment role.
+
+For a minimal-cost hosted demo, deploy the dashboard on Vercel Hobby with project root `apps/dashboard`. See `apps/dashboard/README.md` for the Vercel settings and required environment variables.
+
+## Deployment
+
+```bash
+# Configure (PowerShell)
+.\deploy\agentcore\configure.ps1 -AccountId "<account-id>" -Region "ap-south-1"
+
+# Deploy
+.\deploy\agentcore\deploy.ps1
+
+# Invoke
+.\deploy\agentcore\invoke-help.ps1
+```
+
+The deployment pack includes IAM examples and a one-time CloudWatch Transaction Search setup script under `deploy/agentcore`.
+
+## Quality
+
+```bash
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest
 ```
 
-Current quality status:
-
-- **Tests:** 21 backend tests.
+- **Tests:** 33 across orchestrator routing, workflow integration, scoring, messaging, observability, and runtime.
 - **Coverage:** 100% over `src/businessnext_agent`.
 - **Linting:** Ruff check passes.
 - **Formatting:** Ruff format check passes.
-- **Deployment readiness:** AgentCore entrypoint, deployment scripts, IAM examples, env template, and observability setup are included.
+- **Deployment readiness:** AgentCore entrypoint, deployment scripts, IAM examples, env template, and observability setup.
 - **Operational readiness:** structured JSON logs, request/session/trace correlation, latency, error logging, retries, safe fallback behavior, and no raw PII logging.
-- **Product readiness:** strong for a hiring project / production-style PoC. For a real bank production rollout, the next steps would be live AWS validation, security review, CI/CD pipeline, production data store, and model evaluation against historical campaign outcomes.
 
 ## Trade-Offs
 
-- Likelihood is heuristic and explainable because no historical conversion labels were provided.
-- SQLite is used to keep the assignment self-contained; the repository layer is the migration point for DynamoDB/PostgreSQL.
-- No live AWS smoke test is included, because this hiring project should not require reviewer AWS credentials.
+- **Governed autonomy over full autonomy.** A personal-loan campaign agent that can bypass consent checks or skip approval gates is not a better agent — it is a liability. Compliance-critical controls are deterministic by design.
+- **Heuristic likelihood over false-precision ML.** No historical conversion labels were provided. The heuristic is explainable and calibration-ready; training on fabricated data would produce false confidence.
+- **SQLite over production persistence.** The repository layer has zero coupling to SQLite. Swapping to DynamoDB or PostgreSQL requires implementing the same five methods — no domain or orchestration code changes.
+- **Deterministic planning over LLM planning.** Every routing decision is auditable and reproducible. `HybridPlanner` is the extension point for model-backed planning with deterministic fallback.
+- **WorkflowService as a single narrative.** The approval state machine, customer selection, scoring orchestration, and messaging dispatch are consolidated in one class (~700 lines) to keep the workflow readable as a linear hiring-PoC narrative. In production, these would be extracted into separate bounded-context services behind the same `AgentRequest → AgentResponse` contract.
+- **No live AWS smoke test.** This hiring project should not require reviewer AWS credentials. The Bedrock integration is behind `MessageModelPort` and fully testable with `FakeMessageModel`.
 
 ## Useful Files
 
@@ -237,7 +265,8 @@ Current quality status:
 - `src/businessnext_agent/domain/rules.py`: scoring and likelihood logic.
 - `src/businessnext_agent/domain/messaging.py`: message policy, safety redaction, Bedrock model port.
 - `src/businessnext_agent/infrastructure/observability.py`: structured JSON logging.
+- `src/businessnext_agent/orchestration/router.py`: governed agent orchestrator and policy-validated routing.
+- `src/businessnext_agent/orchestration/evals.py`: route eval harness with bypass-attempt testing.
 - `deploy/agentcore`: AgentCore deployment scripts and IAM examples.
 - `agent.md`: agent capabilities, HITL policy, and message safety rules.
 - `workflow.md`: visual workflow, approval state machine, and runtime sequence.
-  These are left explicit because the current project is a self-contained hiring PoC, not a bank production deployment.
