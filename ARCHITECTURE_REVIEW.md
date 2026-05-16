@@ -6,16 +6,19 @@ This project is best described as a **governed agentic AI system for regulated b
 
 It is not trying to maximize autonomy. It is trying to make autonomy **safe, auditable, and production-ready** in a domain where getting it wrong means contacting a customer who withdrew consent, is flagged for fraud, or is in financial distress.
 
-## Why The Planner Is Bounded
+## How the Planner Balances Model Reasoning and Safety
 
-Free-form model planning is risky in a bank campaign because a model could misread consent, DND, risk flags, or approval state. The implementation therefore uses:
+The system uses two `PlannerPort` implementations composed through `HybridPlanner`:
 
-- `AgentPlan` for schema-bound intent and tool selection.
-- `AgentPolicy` for plan validation and risk flags.
-- Deterministic fallback planning for reproducibility and auditability.
-- `HybridPlanner` as the extension point for a model-backed planner.
+- **`BedrockPlanner`** generates structured plans through Bedrock — intent classification, filter extraction, tool selection, and routing rationale — returned as a schema-validated `AgentPlan`.
+- **`DeterministicPlanner`** handles well-known routes (help, approvals, resets, catalog queries) with zero-latency keyword matching and provides guaranteed fallback when the model is unavailable.
 
-The limit is intentional: model planning can be added, but the model should produce a plan that is **validated before execution**. This is the same pattern used in production agentic systems — constrained planning with policy validation, not unconstrained model reasoning. The deterministic planner also provides zero-latency routing and immunity to prompt-injection attacks against the planning layer.
+Both paths converge at `AgentPolicy`, which validates every plan before execution:
+- Schema enforcement for `AgentPlan` intent and tool names.
+- `SENSITIVE_DIRECTIVES` detection for bypass-attempt blocking.
+- Risk flag tracking for observability.
+
+The LLM reasons about **intent classification and filter extraction**. The policy layer ensures no plan — model-generated or deterministic — can skip compliance checks or bypass approval gates. This is **bounded model reasoning**, not absent model reasoning. The deterministic planner provides zero-latency fallback and immunity to prompt-injection attacks at the planning layer.
 
 ## Why Compliance Is Deterministic
 
@@ -52,7 +55,7 @@ SQLite is the correct minimal choice for a self-contained hiring PoC that review
 
 | Limit | Why It Is The Right Choice |
 |---|---|
-| Active planner is deterministic | Auditability, zero latency, prompt-injection safety; `HybridPlanner` is the extension point |
+| Active planner uses hybrid model + deterministic fallback | Model reasoning for intent/filter extraction with deterministic fallback for reliability; both policy-validated; zero-latency fallback option |
 | Route evals are small and deterministic | Sized for a hiring PoC; the harness supports versioned expansion |
 | Likelihood scoring is heuristic | No historical labels; heuristic is honest and calibration-ready |
 | SQLite for persistence | Zero-infra reviewer setup; repository layer is the single migration point |
@@ -74,7 +77,7 @@ This project demonstrates the architecture expected for **enterprise agentic AI 
 
 | Dimension | What This Project Shows |
 |---|---|
-| Autonomy | Bounded planning with policy validation — not unconstrained model reasoning |
+| Autonomy | Hybrid planning: LLM-backed intent classification and filter extraction, deterministic fallback, policy-validated before execution |
 | Safety | Deterministic compliance controls that cannot be bypassed by prompt or model error |
 | Explainability | Every score, exclusion, and recommendation traces to named rules |
 | Extensibility | Ports for model planning, message generation, data access, and session storage |
@@ -82,4 +85,4 @@ This project demonstrates the architecture expected for **enterprise agentic AI 
 | Testing | Route evals, workflow integration tests, scoring edge cases, safety redaction |
 | Deployment | AgentCore-ready entrypoint, IAM examples, CloudWatch setup, Vercel-ready dashboard |
 
-The system is intentionally **not trying to maximize autonomy**. It is trying to make autonomy **safe, auditable, and production-ready** in a domain where getting it wrong means contacting a customer who withdrew consent, is flagged for fraud, or is in financial distress.
+The system demonstrates **LLM reasoning where it aids task decomposition, deterministic controls where compliance is critical**. It is trying to make autonomy safe, auditable, and production-ready in a domain where getting it wrong means contacting a customer who withdrew consent, is flagged for fraud, or is in financial distress.

@@ -8,7 +8,7 @@ This document shows how the prompt-only AgentCore agent moves from a business re
 flowchart TD
     Start([User sends prompt]) --> Runtime[AgentCore Runtime / main.py]
     Runtime --> Validate[Validate AgentRequest]
-    Validate --> Route[Create AgentPlan]
+    Validate --> Route[Create AgentPlan via HybridPlanner]
     Route --> Policy[Validate plan and risk flags]
     Policy --> Help{Help, catalog, approval, or workflow?}
 
@@ -100,7 +100,7 @@ sequenceDiagram
     User->>AC: {"prompt": "Find high-value customers likely to convert"}
     AC->>Main: Invoke entrypoint
     Main->>Router: AgentRequest
-    Router->>Policy: AgentPlan validation
+    Router->>Policy: AgentPlan validation (model-generated or deterministic fallback)
     Router->>WF: run_workflow_prompt tool
     WF->>Repo: Load or create session
     WF->>Repo: Emit agentic_route_selected event when session exists

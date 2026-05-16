@@ -16,19 +16,20 @@ This system is **intentionally not a fully autonomous agent**. In regulated bank
 
 ### Where the Agent Reasons
 
-- **Intent classification and tool routing** — `GovernedAgentOrchestrator` turns natural-language prompts into schema-validated `AgentPlan` objects with extracted filters, rationale, and risk flags.
-- **Customer selection** — the agent interprets segment, city, employment, threshold, and intent signals from free-text prompts to build dynamic cohorts.
+- **LLM-backed planning** — `BedrockPlanner` uses Bedrock to generate structured `AgentPlan` objects: classifying intent, selecting tools, extracting filters (segment, city, credit score thresholds), and producing routing rationale from natural language. The `HybridPlanner` runs this first and falls back to deterministic matching only when the model is unavailable.
+- **Intent classification and filter extraction** — the LLM interprets natural-language prompts to extract segment, city, employment type, threshold constraints, and classify intent across seven governed categories. This reasoning is schema-validated and policy-checked before execution.
+- **Customer selection reasoning** — the agent interprets segment, city, employment, threshold, and loan-intent signals from free-text prompts to build dynamic cohorts.
 - **Prompt normalization** — synonyms like "CIBIL" → "credit score" and "top customers" → "high-value customers" are resolved before downstream processing.
 - **Scenario-aware message drafting** — the agent selects outreach scenarios (abandoned application, EMI calculator usage, loan inquiry followup, pre-approved offer, near-closure, liquidity context) and drafts personalized messages through Bedrock with structured output.
 - **Safety filtering** — model outputs are redacted for sensitive triggers and discarded entirely if they contain meta-response leakage.
 
-### Where the Agent Does Not Reason (By Design)
+### Where Deterministic Controls Override Model Reasoning (By Design)
 
-- **Compliance filters** — consent, DND, KYC, fraud, complaints, delinquency, recent repayment. These are **not opinion questions**. They are governed campaign rules enforced deterministically.
-- **Approval gates** — the state machine requires explicit token-bound approval at every stage. Loose confirmations like "yes" or "go ahead" are rejected.
-- **Scoring weights and bands** — configured in auditable JSON rules, not inferred by a model.
+- **Compliance filters** — consent, DND, KYC, fraud, complaints, delinquency, recent repayment. These are **not opinion questions**. They are governed campaign rules enforced deterministically. No model reasoning can bypass these checks.
+- **Approval gates** — the state machine requires explicit token-bound approval at every stage. Loose confirmations like "yes" or "go ahead" are rejected. The policy layer enforces this regardless of how a plan was generated.
+- **Scoring weights and bands** — configured in auditable JSON rules, not inferred by a model. This ensures reproducibility and regulatory defensibility.
 
-This is the architecture pattern expected in production banking AI: **autonomy where it helps, deterministic control where it matters**.
+This is the architecture pattern expected in production banking AI: **LLM reasoning where it aids discovery, deterministic controls where compliance is critical**.
 
 ## What The Agent Does
 
@@ -58,17 +59,30 @@ flowchart TD
     Runtime --> Logs[JSON Logs / CloudWatch]
 ```
 
-## Why the Planner Is Deterministic (And the Extension Point for Model Planning)
+## How the Planner Works: Hybrid Model + Deterministic Fallback
 
-The active planner uses structured keyword/intent matching rather than LLM-based planning. This is a deliberate choice for a banking campaign agent:
+The system uses a **hybrid planning architecture** composed through `HybridPlanner` with two concrete `PlannerPort` implementations:
 
-1. **Auditability** — every routing decision is reproducible and explainable. A regulator or compliance officer can trace exactly why a prompt was routed to a specific tool.
-2. **Latency** — deterministic planning adds zero model-call overhead to the routing layer. The only model call happens during message drafting, after human approval.
-3. **Safety** — prompt-injection attacks against the planner cannot cause the agent to skip compliance checks or bypass approval gates.
+1. **`BedrockPlanner`** — LLM-backed structured planning that generates a JSON `AgentPlan` through Bedrock:
+   - **Intent classification** — maps natural-language prompts to one of seven governed intents (capability_discovery, field_catalog, check_catalog, message_style_catalog, workflow_reset, approval_continuation, campaign_workflow).
+   - **Filter extraction** — infers segment, city, employment type, and threshold constraints from free text (e.g., "premium customers in Mumbai with CIBIL above 740" extracts segment=premium, city=mumbai, credit_score_min=740).
+   - **Rationale generation** — produces a human-readable explanation of why the prompt was routed to a specific tool.
+   - **Prompt normalization** — resolves synonyms ("CIBIL" → "credit score") before downstream processing.
 
-The `HybridPlanner` is the extension point: a model-backed `PlannerPort` implementation can be plugged in to handle ambiguous or complex prompts, with the deterministic planner as guaranteed fallback. The policy layer validates any plan — model-generated or deterministic — before execution.
+2. **`DeterministicPlanner`** — keyword/intent matching for well-known routes:
+   - Approval continuations with token validation.
+   - Help/reset requests.
+   - Catalog queries (fields, checks, message styles).
+   - Provides **guaranteed fallback** when the model is unavailable or fails.
 
-This is the same pattern used in production agentic systems: **constrained planning with policy validation, not unconstrained model reasoning**.
+`HybridPlanner` composes these: **the model planner runs first when available, with the deterministic planner as a failsafe**.
+
+Every plan — model-generated or deterministic — is validated by `AgentPolicy` before any tool executes:
+- `AgentPlan` schema enforcement for bounded intent and tool names.
+- `SENSITIVE_DIRECTIVES` detection for bypass-attempt blocking (e.g., "skip approval" flags as `blocked_directive`).
+- Risk flag propagation for observability.
+
+This is the pattern used in production agentic systems: **LLM reasoning where it helps, bounded by policy validation and deterministic fallback for reliability**.
 
 ## Why Likelihood Is Heuristic, Not ML
 
@@ -90,11 +104,10 @@ In a production deployment, `SQLiteStore` would be replaced by a `CRMAdapter` th
 
 ## Key Design Choices
 
-- **Governed autonomy over full autonomy:** the agent can plan and route, but cannot bypass compliance.
-- **Schema-first planning:** `AgentPlan` constrains intent, tool name, prompt, extracted filters, rationale, and risk flags.
-- **Policy before execution:** unsafe prompts are flagged before tools run; hard filters always run later in the workflow.
-- **Deterministic core workflow:** this is deliberate for banking auditability.
-- **Hybrid-ready planning:** a model-backed planner can be plugged into `HybridPlanner`; deterministic planning remains the fallback.
+- **Governed autonomy over full autonomy:** the agent reasons through LLM planning and message drafting, but cannot bypass compliance.
+- **Hybrid planning with fallback:** `BedrockPlanner` provides LLM-backed task decomposition and filter extraction; `DeterministicPlanner` guarantees reliable routing. Both are policy-validated before execution.
+- **Schema-first planning:** `AgentPlan` constrains intent, tool name, prompt, extracted filters, rationale, and risk flags — whether generated by Bedrock or deterministic fallback.
+- **Policy before execution:** unsafe prompts are flagged via `AgentPolicy` before tools run; hard filters always run during workflow.
 - **Model isolation:** message generation goes through `MessageModelPort`, so Bedrock can be faked in tests and swapped later.
 - **Frontend-ready contract:** responses expose status, approval token, events, structured results, observability, and route metadata.
 
@@ -251,10 +264,10 @@ uv run pytest
 
 ## Trade-Offs
 
-- **Governed autonomy over full autonomy.** A personal-loan campaign agent that can bypass consent checks or skip approval gates is not a better agent — it is a liability. Compliance-critical controls are deterministic by design.
+- **Governed autonomy over full autonomy.** The agent reasons through LLM planning and message drafting, but compliance-critical controls (consent, DND, KYC, fraud, delinquency) are deterministic by design and cannot be bypassed. A personal-loan campaign agent that skips these checks is not better — it is a liability.
+- **Hybrid planning over a single approach.** `BedrockPlanner` provides LLM-backed intent classification and filter extraction for ambiguous prompts; `DeterministicPlanner` provides zero-latency fallback for well-known routes. Both are policy-validated. This is not a choice to avoid model reasoning — it is a choice to make it reliable and auditable.
 - **Heuristic likelihood over false-precision ML.** No historical conversion labels were provided. The heuristic is explainable and calibration-ready; training on fabricated data would produce false confidence.
 - **SQLite over production persistence.** The repository layer has zero coupling to SQLite. Swapping to DynamoDB or PostgreSQL requires implementing the same five methods — no domain or orchestration code changes.
-- **Deterministic planning over LLM planning.** Every routing decision is auditable and reproducible. `HybridPlanner` is the extension point for model-backed planning with deterministic fallback.
 - **WorkflowService as a single narrative.** The approval state machine, customer selection, scoring orchestration, and messaging dispatch are consolidated in one class (~700 lines) to keep the workflow readable as a linear hiring-PoC narrative. In production, these would be extracted into separate bounded-context services behind the same `AgentRequest → AgentResponse` contract.
 - **No live AWS smoke test.** This hiring project should not require reviewer AWS credentials. The Bedrock integration is behind `MessageModelPort` and fully testable with `FakeMessageModel`.
 

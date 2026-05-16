@@ -71,15 +71,13 @@ The following capabilities are internal tools, not public APIs:
 
 These are implemented as Strands-decorated tools so a Strands orchestrator can call the same governed workflow capabilities that AgentCore exposes through the prompt-only entrypoint.
 
-The primary AgentCore path uses `GovernedAgentOrchestrator` to classify the prompt, select one of these tools, execute it, and return the route metadata in `structured_result.agentic_route`. This gives the app agentic tool routing while preserving deterministic compliance checks and approval gates.
-
 Plans are schema-validated, policy-checked, risk-flagged, and written to the workflow event log when a session exists. Route evals cover normal routing and approval-bypass attempts.
 
 Live Strands agents load this file as the system prompt and are created with a stable agent identity, description, state metadata, trace attributes, explicit retry strategy, sliding-window conversation management, structured message output, and fail-fast concurrent invocation behavior.
 
-## Runtime Shape
+The primary AgentCore path uses `GovernedAgentOrchestrator` to classify the prompt via `BedrockPlanner` (when available) or `DeterministicPlanner` (fallback), select one of these tools, execute it, and return the route metadata in `structured_result.agentic_route`. This gives the app LLM-backed agentic tool routing with deterministic compliance checks and approval gates that cannot be bypassed.
 
-AgentCore invokes one prompt-oriented entrypoint:
+## Runtime Shape
 
 ```json
 {
