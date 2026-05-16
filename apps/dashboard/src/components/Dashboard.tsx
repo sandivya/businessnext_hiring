@@ -109,6 +109,16 @@ export function Dashboard() {
     invoke(buildFilteredCohortPrompt(filters, objective));
   }
 
+  function updateSelectedIds(ids: string[]) {
+    setSelectedIds(ids);
+    if (sessionId || response || events.length > 0) {
+      setResponse(null);
+      setEvents([]);
+      setSessionId(null);
+      setError("");
+    }
+  }
+
   const metrics = [
     { label: "Customers", value: customers.length, icon: Users },
     { label: "Visible", value: filteredCustomers.length, icon: Database },
@@ -157,7 +167,7 @@ export function Dashboard() {
           <CustomerTable
             customers={filteredCustomers}
             selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
+            onSelectionChange={updateSelectedIds}
             onOpenCustomer={setActiveCustomer}
           />
           <ResultsPanel response={response} />
