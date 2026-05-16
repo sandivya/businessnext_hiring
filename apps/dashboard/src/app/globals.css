@@ -498,6 +498,14 @@ td span {
 .run-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.run-actions .primary-action,
+.run-actions .secondary-action,
+.workflow-panel > .primary-action.full-width {
+  min-height: 44px;
+  padding: 0 16px;
 }
 
 .agent-response {
