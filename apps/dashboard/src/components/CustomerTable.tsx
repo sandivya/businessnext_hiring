@@ -61,7 +61,7 @@ export function CustomerTable({
               <th>Bureau</th>
               <th>Channel</th>
               <th>Consent</th>
-              <th>Intent</th>
+              <th>Intent signals</th>
               <th aria-label="Open detail" />
             </tr>
           </thead>
@@ -93,8 +93,15 @@ export function CustomerTable({
                   </span>
                 </td>
                 <td>
-                  <span className={customer.loanIntentSignals.length ? "pill info" : "pill"}>
-                    {customer.loanIntentSignals.length || "None"}
+                  <span
+                    className={customer.loanIntentSignals.length ? "pill info" : "pill"}
+                    title={
+                      customer.loanIntentSignals.length
+                        ? customer.loanIntentSignals.join(", ")
+                        : "No loan-intent signals"
+                    }
+                  >
+                    {formatIntentSignalCount(customer.loanIntentSignals.length)}
                   </span>
                 </td>
                 <td>
@@ -113,4 +120,11 @@ export function CustomerTable({
       </div>
     </section>
   );
+}
+
+function formatIntentSignalCount(count: number): string {
+  if (count === 0) {
+    return "No signals";
+  }
+  return count === 1 ? "1 signal" : `${count} signals`;
 }
