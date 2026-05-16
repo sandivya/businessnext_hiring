@@ -21,6 +21,7 @@ agentcore/.cli/logs/
 agentcore/.llm-context/
 apps/dashboard/node_modules/
 apps/dashboard/.next/
+apps/dashboard/.vercel/
 apps/dashboard/out/
 apps/dashboard/coverage/
 apps/dashboard/tsconfig.tsbuildinfo
