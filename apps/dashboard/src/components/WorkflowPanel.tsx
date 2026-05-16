@@ -100,6 +100,22 @@ export function WorkflowPanel({
         <div className={`agent-response ${response.status}`}>
           <span className="status-chip">{response.status.replace("_", " ")}</span>
           <p>{cleanAgentMessage(response.message)}</p>
+          {response.suggested_prompts && response.suggested_prompts.length > 0 ? (
+            <div className="suggested-prompts">
+              {response.suggested_prompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  className="prompt-chip"
+                  onClick={() => onInvoke(prompt)}
+                  disabled={loading}
+                  type="button"
+                  title={prompt}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -174,6 +190,9 @@ function cleanAgentMessage(message: string): string {
 function getWorkflowStage(response: AgentResponse | null): { index: number; action: string; icon: "check" | "file" } {
   const result = response?.structured_result ?? {};
   const workflowStage = result.workflow_stage;
+  if (workflowStage === "reset") {
+    return { index: -1, action: "Start new workflow", icon: "check" };
+  }
   if (workflowStage === "check_selection") {
     return { index: 1, action: "Run approved checks", icon: "check" };
   }
