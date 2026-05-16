@@ -333,10 +333,8 @@ td span {
 }
 
 .intent-cell {
-  display: grid;
-  gap: 5px;
-  min-width: 180px;
-  max-width: 250px;
+  min-width: 220px;
+  max-width: 300px;
 }
 
 .intent-signals {
@@ -359,6 +357,18 @@ td span {
   font-weight: 720;
   line-height: 1.25;
   white-space: normal;
+}
+
+.intent-signals .intent-more {
+  background: #dbeafe;
+  color: var(--blue);
+  cursor: help;
+}
+
+.intent-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .check-pill:hover::after,

@@ -113,25 +113,22 @@ export function CustomerTable({
   );
 }
 
-function formatIntentSignalCount(count: number): string {
-  if (count === 0) {
-    return "No signals";
-  }
-  return count === 1 ? "1 signal" : `${count} signals`;
-}
-
 function IntentSignals({ signals }: { signals: string[] }) {
   if (signals.length === 0) {
-    return <span className="pill">No signals</span>;
+    return <span className="intent-empty">None</span>;
   }
-  const visibleSignals = signals.slice(0, 2);
+  const visibleSignals = signals.slice(0, 3);
+  const hiddenSignals = signals.slice(visibleSignals.length);
   const hiddenCount = signals.length - visibleSignals.length;
   return (
     <div className="intent-cell" title={signals.join(", ")}>
-      <span className="pill info">{formatIntentSignalCount(signals.length)}</span>
       <div className="intent-signals">
         {visibleSignals.map((signal) => <span key={signal}>{signal}</span>)}
-        {hiddenCount > 0 ? <span>+{hiddenCount}</span> : null}
+        {hiddenCount > 0 ? (
+          <span className="intent-more" title={hiddenSignals.join(", ")}>
+            +{hiddenCount} more
+          </span>
+        ) : null}
       </div>
     </div>
   );
