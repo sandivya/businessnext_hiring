@@ -9,6 +9,8 @@ type InvokeBody = {
   sessionId?: unknown;
 };
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as InvokeBody;

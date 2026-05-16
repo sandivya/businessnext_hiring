@@ -13,7 +13,7 @@ type CustomerSeed = {
 
 const DATA_DIR = process.env.DASHBOARD_DATA_DIR
   ? path.resolve(process.env.DASHBOARD_DATA_DIR)
-  : path.resolve(process.cwd(), "../../data/seed");
+  : path.resolve(process.cwd(), "data/seed");
 
 export async function loadCustomers(filters?: Partial<CustomerFilters>): Promise<CustomerSummary[]> {
   const seed = await readJson<CustomerSeed>("fabricated_bank_customers_poc_100.json");

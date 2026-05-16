@@ -188,6 +188,10 @@ Set `AGENTCORE_RUNTIME_ARN`, `AWS_REGION`, and `DASHBOARD_PASSWORD` in `.env.loc
 talks only to Next.js route handlers; the server-side adapter invokes AgentCore with AWS SDK
 credentials from the local environment or deployment role.
 
+For a minimal-cost hosted demo, deploy the dashboard on Vercel Hobby with project root
+`apps/dashboard`. See `apps/dashboard/README.md` for the Vercel settings and required
+environment variables.
+
 ## Observability
 
 The app emits structured JSON logs to stdout with:

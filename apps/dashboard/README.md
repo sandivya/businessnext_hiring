@@ -12,10 +12,46 @@ npm run dev
 
 Required environment:
 
-- `AGENTCORE_RUNTIME_ARN`: deployed AgentCore runtime ARN.
 - `AWS_REGION`: `ap-south-1`.
 - `DASHBOARD_PASSWORD`: simple demo password for the app gate.
-- `DASHBOARD_DATA_DIR`: path to the seed data directory, usually `../../data/seed`.
+- `DASHBOARD_USE_MOCK_AGENT`: set to `true` only for a no-AWS demo.
+- `AGENTCORE_RUNTIME_ARN`: deployed AgentCore runtime ARN, required when `DASHBOARD_USE_MOCK_AGENT=false`.
+
+The dashboard includes the seed JSON files under `data/seed`, so `DASHBOARD_DATA_DIR` is optional.
+Set it only if you want to load seed files from another directory.
+
+## Deploy On Vercel Hobby
+
+Use Vercel Hobby only for a personal or non-commercial demo.
+
+Recommended project settings:
+
+- Framework Preset: `Next.js`
+- Root Directory: `apps/dashboard`
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: leave blank
+
+For a no-AWS demo, add these Vercel environment variables:
+
+```text
+DASHBOARD_PASSWORD=<strong-demo-password>
+DASHBOARD_USE_MOCK_AGENT=true
+AWS_REGION=ap-south-1
+```
+
+For a live AgentCore demo, use:
+
+```text
+DASHBOARD_PASSWORD=<strong-demo-password>
+DASHBOARD_USE_MOCK_AGENT=false
+AWS_REGION=ap-south-1
+AGENTCORE_RUNTIME_ARN=<runtime-arn>
+AWS_ACCESS_KEY_ID=<deploy-user-or-role-key>
+AWS_SECRET_ACCESS_KEY=<deploy-user-or-role-secret>
+```
+
+The AWS identity must be allowed to invoke the configured AgentCore runtime.
 
 ## What It Provides
 

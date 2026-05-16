@@ -1,0 +1,933 @@
+{
+  "metadata": {
+    "config_name": "personal_loan_customer_shortlisting_rules_ui_ready",
+    "version": "1.0",
+    "created_on": "2026-05-15",
+    "purpose": "Rules and scoring configuration for identifying high-potential personal loan customers from raw bank customer data.",
+    "recommended_approach": "Apply hard filters first, then calculate a weighted score for remaining customers. Use matched rule count only as a secondary tie-breaker.",
+    "scoring_method": {
+      "primary": "weighted_score",
+      "secondary": "matched_parameter_count",
+      "reason": "Weighted scoring is preferred because some signals indicate much stronger intent or suitability than others. A simple count can over-rank customers who match many weak signals while under-ranking customers who match fewer but stronger signals."
+    }
+  },
+  "ui_sections": [
+    {
+      "section_id": "hard_filters",
+      "section_title": "Hard Filters",
+      "display_order": 1,
+      "section_description": "Mandatory checks applied before scoring. If a customer fails any hard filter, they should not be shortlisted for this campaign, regardless of how many positive signals they have.",
+      "ui_badge": "Mandatory",
+      "rules": [
+        {
+          "rule_id": "HF001",
+          "display_name": "Marketing Consent Available",
+          "description": "Checks whether the customer has permitted the bank to send marketing or promotional communication.",
+          "business_rationale": "Customers without marketing consent should not be contacted for campaign outreach.",
+          "data_fields": [
+            "marketing_consent"
+          ],
+          "condition_summary": "marketing_consent must be true",
+          "technical_condition": {
+            "field": "marketing_consent",
+            "operator": "equals",
+            "value": true
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Consent",
+            "severity": "Critical",
+            "pass_label": "Consent available",
+            "fail_label": "Consent not available"
+          }
+        },
+        {
+          "rule_id": "HF002",
+          "display_name": "Customer Not on DND",
+          "description": "Checks whether the customer has opted into Do Not Disturb or similar communication suppression preferences.",
+          "business_rationale": "Customers marked as DND should be suppressed from proactive outreach to avoid consent and customer-experience issues.",
+          "data_fields": [
+            "dnd_flag"
+          ],
+          "condition_summary": "dnd_flag must be false",
+          "technical_condition": {
+            "field": "dnd_flag",
+            "operator": "equals",
+            "value": false
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Consent",
+            "severity": "Critical",
+            "pass_label": "Not on DND",
+            "fail_label": "DND active"
+          }
+        },
+        {
+          "rule_id": "HF003",
+          "display_name": "Valid KYC",
+          "description": "Checks whether the customer's Know Your Customer status is valid and up to date.",
+          "business_rationale": "Loan outreach should not be prioritized for customers whose KYC status may block loan processing.",
+          "data_fields": [
+            "kyc_status"
+          ],
+          "condition_summary": "kyc_status must be Valid",
+          "technical_condition": {
+            "field": "kyc_status",
+            "operator": "equals",
+            "value": "Valid"
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Compliance",
+            "severity": "Critical",
+            "pass_label": "KYC valid",
+            "fail_label": "KYC not valid"
+          }
+        },
+        {
+          "rule_id": "HF004",
+          "display_name": "Active Account",
+          "description": "Checks whether the customer's primary relationship/account status is active.",
+          "business_rationale": "Frozen, dormant, or inactive accounts may create operational or compliance issues during loan fulfilment.",
+          "data_fields": [
+            "account_status"
+          ],
+          "condition_summary": "account_status must be Active",
+          "technical_condition": {
+            "field": "account_status",
+            "operator": "equals",
+            "value": "Active"
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Account Status",
+            "severity": "Critical",
+            "pass_label": "Account active",
+            "fail_label": "Account not active"
+          }
+        },
+        {
+          "rule_id": "HF005",
+          "display_name": "No Fraud Flag",
+          "description": "Checks whether the customer's profile has an active fraud-related flag.",
+          "business_rationale": "Customers with fraud flags should not be included in automated or semi-automated loan campaigns.",
+          "data_fields": [
+            "service_interactions.fraud_flag"
+          ],
+          "condition_summary": "service_interactions.fraud_flag must be false",
+          "technical_condition": {
+            "field": "service_interactions.fraud_flag",
+            "operator": "equals",
+            "value": false
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Risk",
+            "severity": "Critical",
+            "pass_label": "No fraud flag",
+            "fail_label": "Fraud flag present"
+          }
+        },
+        {
+          "rule_id": "HF006",
+          "display_name": "No Active Complaint",
+          "description": "Checks whether the customer currently has an unresolved complaint with the bank.",
+          "business_rationale": "Campaign outreach during an unresolved complaint can worsen customer experience and should be avoided.",
+          "data_fields": [
+            "service_interactions.active_complaint"
+          ],
+          "condition_summary": "service_interactions.active_complaint must be false",
+          "technical_condition": {
+            "field": "service_interactions.active_complaint",
+            "operator": "equals",
+            "value": false
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Customer Experience",
+            "severity": "High",
+            "pass_label": "No active complaint",
+            "fail_label": "Active complaint"
+          }
+        },
+        {
+          "rule_id": "HF007",
+          "display_name": "No Recent Delinquency",
+          "description": "Checks whether the customer has had any repayment delinquency in the last 12 months.",
+          "business_rationale": "Recent delinquency indicates repayment risk and should block proactive loan outreach.",
+          "data_fields": [
+            "credit_profile.delinquency_last_12m"
+          ],
+          "condition_summary": "credit_profile.delinquency_last_12m must be false",
+          "technical_condition": {
+            "field": "credit_profile.delinquency_last_12m",
+            "operator": "equals",
+            "value": false
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Credit Risk",
+            "severity": "Critical",
+            "pass_label": "No recent delinquency",
+            "fail_label": "Recent delinquency"
+          }
+        },
+        {
+          "rule_id": "HF008",
+          "display_name": "No SMA/NPA/Restructuring History",
+          "description": "Checks whether the customer has been marked under SMA, NPA, or loan restructuring status in the last 12 months.",
+          "business_rationale": "Such statuses indicate elevated credit risk and should prevent campaign shortlisting.",
+          "data_fields": [
+            "credit_profile.sma_npa_or_restructured_last_12m"
+          ],
+          "condition_summary": "credit_profile.sma_npa_or_restructured_last_12m must be false",
+          "technical_condition": {
+            "field": "credit_profile.sma_npa_or_restructured_last_12m",
+            "operator": "equals",
+            "value": false
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Credit Risk",
+            "severity": "Critical",
+            "pass_label": "No SMA/NPA/restructure",
+            "fail_label": "SMA/NPA/restructure found"
+          }
+        },
+        {
+          "rule_id": "HF009",
+          "display_name": "No Recent NACH or Cheque Bounce",
+          "description": "Checks whether the customer had any NACH or cheque bounce in the last 3 months.",
+          "business_rationale": "Recent payment bounces suggest short-term liquidity or repayment discipline issues.",
+          "data_fields": [
+            "credit_profile.nach_or_cheque_bounce_count_3m"
+          ],
+          "condition_summary": "credit_profile.nach_or_cheque_bounce_count_3m must be 0",
+          "technical_condition": {
+            "field": "credit_profile.nach_or_cheque_bounce_count_3m",
+            "operator": "equals",
+            "value": 0
+          },
+          "failure_behavior": "exclude_from_shortlist",
+          "ui_hint": {
+            "category": "Credit Risk",
+            "severity": "High",
+            "pass_label": "No recent bounce",
+            "fail_label": "Recent bounce found"
+          }
+        }
+      ]
+    },
+    {
+      "section_id": "weighted_scoring",
+      "section_title": "Weighted Scoring Rules",
+      "display_order": 2,
+      "section_description": "Rules used to rank customers after they pass the hard filters. Higher scores indicate stronger potential for loan outreach this month.",
+      "max_score": 100,
+      "categories": [
+        {
+          "category_id": "intent_signals",
+          "category_title": "Intent Signals",
+          "category_weight": 35,
+          "display_order": 1,
+          "description": "Signals showing that the customer may already be actively thinking about or exploring a loan.",
+          "ui_badge": "Strongest Predictor",
+          "rules": [
+            {
+              "rule_id": "INT001",
+              "display_name": "Loan Application Started but Not Submitted",
+              "description": "Customer started a loan application but did not complete submission.",
+              "business_rationale": "This is one of the strongest intent signals because the customer has already shown direct interest.",
+              "data_fields": [
+                "digital_loan_activity.loan_application_status",
+                "digital_loan_activity.loan_application_started_date"
+              ],
+              "condition_summary": "loan_application_status is Started_Not_Submitted and loan_application_started_date is within the last 30 days",
+              "technical_condition": {
+                "all": [
+                  {
+                    "field": "digital_loan_activity.loan_application_status",
+                    "operator": "equals",
+                    "value": "Started_Not_Submitted"
+                  },
+                  {
+                    "field": "digital_loan_activity.loan_application_started_date",
+                    "operator": "within_last_days",
+                    "value": 30
+                  }
+                ]
+              },
+              "points": 12,
+              "ui_hint": {
+                "category": "Intent",
+                "strength": "Very High",
+                "display_label": "Incomplete loan application",
+                "tooltip": "Customer began the loan journey but did not finish it."
+              }
+            },
+            {
+              "rule_id": "INT002",
+              "display_name": "Recent EMI Calculator Usage",
+              "description": "Customer used the EMI calculator recently.",
+              "business_rationale": "EMI calculator usage suggests active planning around loan amount, tenure, and affordability.",
+              "data_fields": [
+                "digital_loan_activity.emi_calculator_last_used_date"
+              ],
+              "condition_summary": "emi_calculator_last_used_date is within the last 14 days",
+              "technical_condition": {
+                "field": "digital_loan_activity.emi_calculator_last_used_date",
+                "operator": "within_last_days",
+                "value": 14
+              },
+              "points": 9,
+              "ui_hint": {
+                "category": "Intent",
+                "strength": "High",
+                "display_label": "Recent EMI planning",
+                "tooltip": "Customer recently explored EMI options."
+              }
+            },
+            {
+              "rule_id": "INT003",
+              "display_name": "Repeated Loan Product Page Visits",
+              "description": "Customer visited the loan product page multiple times in the last 30 days.",
+              "business_rationale": "Repeated visits reduce the chance of accidental interest and indicate active product comparison or consideration.",
+              "data_fields": [
+                "digital_loan_activity.loan_product_page_sessions_30d"
+              ],
+              "condition_summary": "loan_product_page_sessions_30d is greater than or equal to 3",
+              "technical_condition": {
+                "field": "digital_loan_activity.loan_product_page_sessions_30d",
+                "operator": "greater_than_or_equal_to",
+                "value": 3
+              },
+              "points": 7,
+              "ui_hint": {
+                "category": "Intent",
+                "strength": "Medium High",
+                "display_label": "Repeated loan-page visits",
+                "tooltip": "Customer viewed loan product content multiple times."
+              }
+            },
+            {
+              "rule_id": "INT004",
+              "display_name": "Recent Loan Offer Click",
+              "description": "Customer clicked a loan offer or campaign link recently.",
+              "business_rationale": "Click behavior indicates engagement with a specific offer, even if an application was not started.",
+              "data_fields": [
+                "digital_loan_activity.loan_offer_clicked_date"
+              ],
+              "condition_summary": "loan_offer_clicked_date is within the last 30 days",
+              "technical_condition": {
+                "field": "digital_loan_activity.loan_offer_clicked_date",
+                "operator": "within_last_days",
+                "value": 30
+              },
+              "points": 4,
+              "ui_hint": {
+                "category": "Intent",
+                "strength": "Medium",
+                "display_label": "Loan offer clicked",
+                "tooltip": "Customer interacted with a loan offer."
+              }
+            },
+            {
+              "rule_id": "INT005",
+              "display_name": "Recent Loan-Related Inquiry",
+              "description": "Customer contacted the branch or call center with a loan-related inquiry.",
+              "business_rationale": "A spoken or assisted-channel inquiry is a strong sign of serious interest and may need quick follow-up.",
+              "data_fields": [
+                "service_interactions.last_loan_related_inquiry_date"
+              ],
+              "condition_summary": "last_loan_related_inquiry_date is within the last 30 days",
+              "technical_condition": {
+                "field": "service_interactions.last_loan_related_inquiry_date",
+                "operator": "within_last_days",
+                "value": 30
+              },
+              "points": 8,
+              "ui_hint": {
+                "category": "Intent",
+                "strength": "High",
+                "display_label": "Recent loan inquiry",
+                "tooltip": "Customer recently asked about a loan through a service channel."
+              }
+            },
+            {
+              "rule_id": "INT006",
+              "display_name": "Recent Personal Loan Bureau Enquiry",
+              "description": "Customer has a recent bureau enquiry for a personal loan.",
+              "business_rationale": "This can indicate that the customer is shopping for credit and may be comparing lenders.",
+              "data_fields": [
+                "credit_profile.personal_loan_bureau_enquiry_date"
+              ],
+              "condition_summary": "personal_loan_bureau_enquiry_date is within the last 45 days",
+              "technical_condition": {
+                "field": "credit_profile.personal_loan_bureau_enquiry_date",
+                "operator": "within_last_days",
+                "value": 45
+              },
+              "points": 6,
+              "ui_hint": {
+                "category": "Intent",
+                "strength": "Medium High",
+                "display_label": "Recent bureau enquiry",
+                "tooltip": "Customer may be exploring personal loan options externally."
+              }
+            }
+          ]
+        },
+        {
+          "category_id": "creditworthiness_and_affordability",
+          "category_title": "Creditworthiness & Affordability",
+          "category_weight": 25,
+          "display_order": 2,
+          "description": "Signals that indicate whether the customer appears financially stable and suitable for responsible loan outreach.",
+          "ui_badge": "Ability to Repay",
+          "rules": [
+            {
+              "rule_id": "CRD001",
+              "display_name": "Stable Salary Credit",
+              "description": "Customer has received salary credits consistently for at least 6 months.",
+              "business_rationale": "Stable salary credit gives the bank confidence about recurring income and repayment capacity.",
+              "data_fields": [
+                "salary_account",
+                "salary_credit_months"
+              ],
+              "condition_summary": "salary_account is true and salary_credit_months is greater than or equal to 6",
+              "technical_condition": {
+                "all": [
+                  {
+                    "field": "salary_account",
+                    "operator": "equals",
+                    "value": true
+                  },
+                  {
+                    "field": "salary_credit_months",
+                    "operator": "greater_than_or_equal_to",
+                    "value": 6
+                  }
+                ]
+              },
+              "points": 6,
+              "ui_hint": {
+                "category": "Affordability",
+                "strength": "High",
+                "display_label": "Stable salary history",
+                "tooltip": "Salary has been credited consistently for 6+ months."
+              }
+            },
+            {
+              "rule_id": "CRD002",
+              "display_name": "No Missed EMI in Last 24 Months",
+              "description": "Customer has no missed EMI records in the last 24 months.",
+              "business_rationale": "Clean repayment behavior is a strong indicator of future repayment discipline.",
+              "data_fields": [
+                "credit_profile.missed_emi_count_24m"
+              ],
+              "condition_summary": "missed_emi_count_24m equals 0",
+              "technical_condition": {
+                "field": "credit_profile.missed_emi_count_24m",
+                "operator": "equals",
+                "value": 0
+              },
+              "points": 6,
+              "ui_hint": {
+                "category": "Credit Risk",
+                "strength": "High",
+                "display_label": "Clean EMI record",
+                "tooltip": "No missed EMI recorded in the last 24 months."
+              }
+            },
+            {
+              "rule_id": "CRD003",
+              "display_name": "Strong Bureau Score",
+              "description": "Customer's bureau score is above the preferred threshold.",
+              "business_rationale": "A higher bureau score indicates stronger external credit behavior and may support better pricing or faster approval.",
+              "data_fields": [
+                "credit_profile.bureau_score"
+              ],
+              "condition_summary": "bureau_score is greater than or equal to 740",
+              "technical_condition": {
+                "field": "credit_profile.bureau_score",
+                "operator": "greater_than_or_equal_to",
+                "value": 740
+              },
+              "points": 5,
+              "ui_hint": {
+                "category": "Credit Risk",
+                "strength": "Medium High",
+                "display_label": "Strong bureau score",
+                "tooltip": "Bureau score is at or above the preferred threshold."
+              }
+            },
+            {
+              "rule_id": "CRD004",
+              "display_name": "Strong Internal Risk Band",
+              "description": "Customer belongs to an acceptable internal risk band.",
+              "business_rationale": "Internal risk bands use the bank's own relationship and behavior data to assess customer risk.",
+              "data_fields": [
+                "credit_profile.internal_risk_band"
+              ],
+              "condition_summary": "internal_risk_band is A or B",
+              "technical_condition": {
+                "field": "credit_profile.internal_risk_band",
+                "operator": "in",
+                "value": [
+                  "A",
+                  "B"
+                ]
+              },
+              "points": 4,
+              "ui_hint": {
+                "category": "Credit Risk",
+                "strength": "Medium",
+                "display_label": "Acceptable internal risk band",
+                "tooltip": "Customer falls within internal risk bands A or B."
+              }
+            },
+            {
+              "rule_id": "CRD005",
+              "display_name": "Pre-Approved Loan Amount Available",
+              "description": "Customer has a positive pre-approved personal loan amount available in the bank's system.",
+              "business_rationale": "Pre-approved availability makes the campaign more actionable and can reduce fulfilment friction.",
+              "data_fields": [
+                "loan_profile.pre_approved_personal_loan_amount"
+              ],
+              "condition_summary": "pre_approved_personal_loan_amount is greater than 0",
+              "technical_condition": {
+                "field": "loan_profile.pre_approved_personal_loan_amount",
+                "operator": "greater_than",
+                "value": 0
+              },
+              "points": 4,
+              "ui_hint": {
+                "category": "Offer Readiness",
+                "strength": "Medium",
+                "display_label": "Pre-approved amount available",
+                "tooltip": "Customer has a positive pre-approved personal loan limit."
+              }
+            }
+          ]
+        },
+        {
+          "category_id": "financial_need_or_trigger",
+          "category_title": "Financial Need or Trigger",
+          "category_weight": 20,
+          "display_order": 3,
+          "description": "Signals that may indicate a current or recent financial need. These should be used carefully and mostly for internal prioritization, not intrusive messaging.",
+          "ui_badge": "Why Now",
+          "rules": [
+            {
+              "rule_id": "TRG001",
+              "display_name": "Credit Card Utilization Spike",
+              "description": "Customer's current credit card utilization is high and has increased sharply compared with 30 days ago.",
+              "business_rationale": "A utilization spike can indicate recent high spending or short-term liquidity need, especially when repayment behavior is clean.",
+              "data_fields": [
+                "credit_profile.credit_card_utilization_current_pct",
+                "credit_profile.credit_card_utilization_30d_ago_pct"
+              ],
+              "condition_summary": "current utilization is at least 50% and has increased by at least 20 percentage points compared with 30 days ago",
+              "technical_condition": {
+                "all": [
+                  {
+                    "field": "credit_profile.credit_card_utilization_current_pct",
+                    "operator": "greater_than_or_equal_to",
+                    "value": 50
+                  },
+                  {
+                    "field": "credit_profile.credit_card_utilization_current_pct - credit_profile.credit_card_utilization_30d_ago_pct",
+                    "operator": "greater_than_or_equal_to",
+                    "value": 20
+                  }
+                ]
+              },
+              "points": 6,
+              "sensitivity": "Medium",
+              "personalization_guidance": "Do not explicitly mention card utilization in customer-facing messages.",
+              "ui_hint": {
+                "category": "Financial Trigger",
+                "strength": "High",
+                "display_label": "Utilization spike",
+                "tooltip": "Current card utilization is high and has increased materially."
+              }
+            },
+            {
+              "rule_id": "TRG002",
+              "display_name": "Recent Fixed Deposit Closure",
+              "description": "Customer closed a fixed deposit within the recent observation window.",
+              "business_rationale": "A recent FD closure may indicate liquidity need or a large planned expense.",
+              "data_fields": [
+                "recent_financial_activity.fd_closed_last_60d"
+              ],
+              "condition_summary": "fd_closed_last_60d is true",
+              "technical_condition": {
+                "field": "recent_financial_activity.fd_closed_last_60d",
+                "operator": "equals",
+                "value": true
+              },
+              "points": 4,
+              "sensitivity": "Medium",
+              "personalization_guidance": "Use only for internal prioritization. Avoid saying the bank noticed FD closure.",
+              "ui_hint": {
+                "category": "Financial Trigger",
+                "strength": "Medium",
+                "display_label": "Recent FD closure",
+                "tooltip": "Customer closed an FD in the recent period."
+              }
+            },
+            {
+              "rule_id": "TRG003",
+              "display_name": "Recent Mutual Fund Redemption",
+              "description": "Customer redeemed mutual fund holdings within the recent observation window.",
+              "business_rationale": "A redemption may indicate liquidity need or planned spending.",
+              "data_fields": [
+                "recent_financial_activity.mf_redeemed_last_60d"
+              ],
+              "condition_summary": "mf_redeemed_last_60d is true",
+              "technical_condition": {
+                "field": "recent_financial_activity.mf_redeemed_last_60d",
+                "operator": "equals",
+                "value": true
+              },
+              "points": 4,
+              "sensitivity": "Medium",
+              "personalization_guidance": "Use only for internal prioritization. Avoid explicitly mentioning redemption in outreach.",
+              "ui_hint": {
+                "category": "Financial Trigger",
+                "strength": "Medium",
+                "display_label": "Recent MF redemption",
+                "tooltip": "Customer redeemed mutual fund holdings recently."
+              }
+            },
+            {
+              "rule_id": "TRG004",
+              "display_name": "Large Recent Debit",
+              "description": "Customer had a large debit in the last 30 days relative to monthly income.",
+              "business_rationale": "A large debit can indicate a recent major expense and may create a need for structured repayment or liquidity support.",
+              "data_fields": [
+                "recent_financial_activity.large_single_debit_amount_30d",
+                "monthly_income"
+              ],
+              "condition_summary": "large_single_debit_amount_30d is at least 75% of monthly_income",
+              "technical_condition": {
+                "field": "recent_financial_activity.large_single_debit_amount_30d / monthly_income",
+                "operator": "greater_than_or_equal_to",
+                "value": 0.75
+              },
+              "points": 3,
+              "sensitivity": "Medium",
+              "personalization_guidance": "Avoid mentioning specific transaction categories unless the customer disclosed the need directly.",
+              "ui_hint": {
+                "category": "Financial Trigger",
+                "strength": "Medium",
+                "display_label": "Large recent debit",
+                "tooltip": "Customer had a large debit compared with income."
+              }
+            },
+            {
+              "rule_id": "TRG005",
+              "display_name": "Recurring Low Balance Before Salary",
+              "description": "Customer's balance reached near-zero multiple times before salary credit.",
+              "business_rationale": "Repeated pre-salary low balance can indicate a recurring liquidity gap.",
+              "data_fields": [
+                "recent_financial_activity.balance_near_zero_before_salary_count_3m"
+              ],
+              "condition_summary": "balance_near_zero_before_salary_count_3m is greater than or equal to 2",
+              "technical_condition": {
+                "field": "recent_financial_activity.balance_near_zero_before_salary_count_3m",
+                "operator": "greater_than_or_equal_to",
+                "value": 2
+              },
+              "points": 3,
+              "sensitivity": "High",
+              "personalization_guidance": "Do not mention low balance directly in customer-facing communication.",
+              "ui_hint": {
+                "category": "Financial Trigger",
+                "strength": "Medium",
+                "display_label": "Recurring low balance",
+                "tooltip": "Balance has dropped very low before salary more than once."
+              }
+            }
+          ]
+        },
+        {
+          "category_id": "relationship_value",
+          "category_title": "Relationship Value",
+          "category_weight": 10,
+          "display_order": 4,
+          "description": "Signals showing the depth, value, and maturity of the customer's relationship with the bank.",
+          "ui_badge": "Relationship Strength",
+          "rules": [
+            {
+              "rule_id": "REL001",
+              "display_name": "Mature Bank Relationship",
+              "description": "Customer has been with the bank for at least 18 months.",
+              "business_rationale": "A longer relationship gives the bank more behavioral data and can improve trust and fulfilment confidence.",
+              "data_fields": [
+                "bank_tenure_months"
+              ],
+              "condition_summary": "bank_tenure_months is greater than or equal to 18",
+              "technical_condition": {
+                "field": "bank_tenure_months",
+                "operator": "greater_than_or_equal_to",
+                "value": 18
+              },
+              "points": 3,
+              "ui_hint": {
+                "category": "Relationship",
+                "strength": "Medium",
+                "display_label": "18+ months with bank",
+                "tooltip": "Customer has a mature banking relationship."
+              }
+            },
+            {
+              "rule_id": "REL002",
+              "display_name": "Meaningful Relationship Value",
+              "description": "Customer's total relationship value is above the campaign threshold.",
+              "business_rationale": "Higher relationship value helps prioritize RM effort and personalized outreach.",
+              "data_fields": [
+                "total_relationship_value"
+              ],
+              "condition_summary": "total_relationship_value is greater than or equal to 300000",
+              "technical_condition": {
+                "field": "total_relationship_value",
+                "operator": "greater_than_or_equal_to",
+                "value": 300000
+              },
+              "points": 3,
+              "ui_hint": {
+                "category": "Relationship",
+                "strength": "Medium",
+                "display_label": "Meaningful relationship value",
+                "tooltip": "Customer has sufficient relationship value for prioritization."
+              }
+            },
+            {
+              "rule_id": "REL003",
+              "display_name": "Multiple Products Held",
+              "description": "Customer holds at least three products with the bank.",
+              "business_rationale": "Multi-product customers typically have deeper engagement and richer internal data.",
+              "data_fields": [
+                "products_held"
+              ],
+              "condition_summary": "products_held count is greater than or equal to 3",
+              "technical_condition": {
+                "field": "products_held.length",
+                "operator": "greater_than_or_equal_to",
+                "value": 3
+              },
+              "points": 2,
+              "ui_hint": {
+                "category": "Relationship",
+                "strength": "Low Medium",
+                "display_label": "Multi-product customer",
+                "tooltip": "Customer holds three or more bank products."
+              }
+            },
+            {
+              "rule_id": "REL004",
+              "display_name": "Preferred or Premium Segment",
+              "description": "Customer belongs to a higher-value customer segment.",
+              "business_rationale": "Preferred and Premium customers may justify more personalized relationship-manager outreach.",
+              "data_fields": [
+                "customer_segment"
+              ],
+              "condition_summary": "customer_segment is Preferred or Premium",
+              "technical_condition": {
+                "field": "customer_segment",
+                "operator": "in",
+                "value": [
+                  "Preferred",
+                  "Premium"
+                ]
+              },
+              "points": 2,
+              "ui_hint": {
+                "category": "Relationship",
+                "strength": "Low Medium",
+                "display_label": "Preferred/Premium segment",
+                "tooltip": "Customer belongs to a higher-value service segment."
+              }
+            }
+          ]
+        },
+        {
+          "category_id": "timing_and_contactability",
+          "category_title": "Timing & Contactability",
+          "category_weight": 10,
+          "display_order": 5,
+          "description": "Signals that help determine whether this is a good time to contact the customer and which channels may work best.",
+          "ui_badge": "When to Contact",
+          "rules": [
+            {
+              "rule_id": "TIM001",
+              "display_name": "Recent Salary Credit",
+              "description": "Customer received salary credit in the last few days.",
+              "business_rationale": "Customers may be more financially confident and responsive immediately after salary credit.",
+              "data_fields": [
+                "last_salary_credit_date"
+              ],
+              "condition_summary": "last_salary_credit_date is within the last 3 days",
+              "technical_condition": {
+                "field": "last_salary_credit_date",
+                "operator": "within_last_days",
+                "value": 3
+              },
+              "points": 3,
+              "ui_hint": {
+                "category": "Timing",
+                "strength": "Medium",
+                "display_label": "Recently salaried",
+                "tooltip": "Salary was credited recently."
+              }
+            },
+            {
+              "rule_id": "TIM002",
+              "display_name": "Recently Active on App",
+              "description": "Customer has used the mobile app recently.",
+              "business_rationale": "Recent app activity increases the chance that digital messages or in-app offers will be seen.",
+              "data_fields": [
+                "app_last_active_date"
+              ],
+              "condition_summary": "app_last_active_date is within the last 7 days",
+              "technical_condition": {
+                "field": "app_last_active_date",
+                "operator": "within_last_days",
+                "value": 7
+              },
+              "points": 3,
+              "ui_hint": {
+                "category": "Contactability",
+                "strength": "Medium",
+                "display_label": "Recently app active",
+                "tooltip": "Customer was active on the app in the last 7 days."
+              }
+            },
+            {
+              "rule_id": "TIM003",
+              "display_name": "Not Contacted Recently",
+              "description": "Customer has not received recent marketing outreach.",
+              "business_rationale": "Suppressing recently contacted customers reduces fatigue and improves campaign experience.",
+              "data_fields": [
+                "last_marketing_contact_date"
+              ],
+              "condition_summary": "last_marketing_contact_date is older than 30 days or null",
+              "technical_condition": {
+                "any": [
+                  {
+                    "field": "last_marketing_contact_date",
+                    "operator": "older_than_days",
+                    "value": 30
+                  },
+                  {
+                    "field": "last_marketing_contact_date",
+                    "operator": "is_null",
+                    "value": true
+                  }
+                ]
+              },
+              "points": 2,
+              "ui_hint": {
+                "category": "Contactability",
+                "strength": "Low Medium",
+                "display_label": "No recent campaign contact",
+                "tooltip": "Customer has not been contacted recently."
+              }
+            },
+            {
+              "rule_id": "TIM004",
+              "display_name": "Preferred Contact Channel Available",
+              "description": "Customer has a preferred outreach channel recorded.",
+              "business_rationale": "Using the customer's preferred channel can improve reachability and response rates.",
+              "data_fields": [
+                "preferred_contact_channel"
+              ],
+              "condition_summary": "preferred_contact_channel is not null",
+              "technical_condition": {
+                "field": "preferred_contact_channel",
+                "operator": "not_null",
+                "value": true
+              },
+              "points": 2,
+              "ui_hint": {
+                "category": "Contactability",
+                "strength": "Low Medium",
+                "display_label": "Preferred channel available",
+                "tooltip": "Customer has a recorded preferred contact channel."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_id": "shortlist_bands",
+      "section_title": "Shortlist Bands",
+      "display_order": 3,
+      "section_description": "Score bands used to group customers after hard filters and weighted scoring.",
+      "bands": [
+        {
+          "band_id": "P1",
+          "display_name": "Priority 1",
+          "score_min": 80,
+          "score_max": 100,
+          "description": "Highest-priority customers with strong intent, suitable credit profile, and good timing/contactability.",
+          "suggested_action": "Relationship manager call plus personalized message."
+        },
+        {
+          "band_id": "P2",
+          "display_name": "Priority 2",
+          "score_min": 65,
+          "score_max": 79,
+          "description": "Good candidates who show meaningful signals but may need lighter-touch outreach or additional validation.",
+          "suggested_action": "Digital offer followed by RM or assisted-channel follow-up."
+        },
+        {
+          "band_id": "P3",
+          "display_name": "Priority 3",
+          "score_min": 50,
+          "score_max": 64,
+          "description": "Moderate-potential customers suitable for nurture campaigns rather than immediate RM attention.",
+          "suggested_action": "Low-touch campaign or educational loan content."
+        },
+        {
+          "band_id": "P4",
+          "display_name": "Low Priority",
+          "score_min": 0,
+          "score_max": 49,
+          "description": "Customers with limited current signals for this month\u2019s personal loan campaign.",
+          "suggested_action": "Do not prioritize for this campaign cycle."
+        }
+      ]
+    },
+    {
+      "section_id": "implementation_notes",
+      "section_title": "Implementation Notes",
+      "display_order": 4,
+      "notes": [
+        {
+          "title": "Use weighted score as the primary ranking method",
+          "description": "Intent and eligibility signals should not be treated equally. Weighted scoring prevents weak but numerous signals from overpowering fewer but stronger signals."
+        },
+        {
+          "title": "Keep hard filters separate from scoring",
+          "description": "Hard filters should be binary gates. A customer who fails a consent, KYC, account status, fraud, complaint, or credit-risk gate should not be rescued by a high score."
+        },
+        {
+          "title": "Use matched rule count only as a tie-breaker",
+          "description": "Matched parameter count is useful for explainability but should not be the main ranking metric."
+        },
+        {
+          "title": "Do not over-personalize sensitive triggers",
+          "description": "Signals such as medical payments, low balances, utilization spikes, FD closure, or mutual fund redemption should usually be used internally and not directly referenced in customer-facing messages."
+        },
+        {
+          "title": "Make thresholds configurable",
+          "description": "Values such as bureau score threshold, salary history threshold, utilization spike threshold, and campaign score bands should be configurable by risk, compliance, and business teams."
+        }
+      ]
+    }
+  ]
+}
