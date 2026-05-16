@@ -34,6 +34,14 @@ class FailingAgent:
         raise RuntimeError("temporary model failure")
 
 
+class MetaMessageModel:
+    def draft(self, prompt: str, fallback: str) -> str:
+        return (
+            "I’m ready to generate the concise outreach message. To proceed, please approve "
+            "the draft generation with the token below: Approval token: `draft_msg_20240516`"
+        )
+
+
 def test_messaging_policy_and_redaction(service) -> None:
     customers = service.store.list_customers()
     engine = ScoringEngine(
@@ -51,6 +59,23 @@ def test_messaging_policy_and_redaction(service) -> None:
     assert drafts[0].tone_id
     assert "Sensitive inferred triggers" in drafts[0].safety_notes[0]
     assert "low balance" not in policy._redact("Your low balance was noticed").lower()
+
+
+def test_messaging_policy_discards_model_meta_responses(service) -> None:
+    customers = service.store.list_customers()
+    engine = ScoringEngine(
+        service.store.get_rules("shortlisting"), __import__("datetime").date(2026, 5, 15)
+    )
+    evaluations = engine.rank(customers, limit=1)
+    policy = MessagingPolicy(service.store.get_rules("messaging"), MetaMessageModel())
+    drafts = policy.draft_messages(
+        evaluations,
+        {customer["customer_id"]: customer for customer in customers},
+        "formal_rm",
+    )
+    assert drafts
+    assert "approval token" not in drafts[0].body.lower()
+    assert "approve" not in drafts[0].body.lower()
 
 
 def test_strands_bedrock_message_model_uses_injected_agent() -> None:

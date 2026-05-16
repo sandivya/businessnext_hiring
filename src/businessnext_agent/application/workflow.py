@@ -201,7 +201,6 @@ class WorkflowService:
         )
         if missing:
             message += f" I could not find these requested fields: {', '.join(missing)}."
-        message += f" Reply 'approve {token}' to continue."
         return AgentResponse(
             session_id=state.session_id,
             status=ResponseStatus.NEEDS_APPROVAL,
@@ -250,8 +249,7 @@ class WorkflowService:
             message=(
                 f"I recommend running all {len(state.selected_check_ids)} configured checks: "
                 "mandatory hard filters first, then weighted scoring. "
-                f"Reply 'approve {token}' to run them, or include scoring rule IDs "
-                "such as INT001 CRD001 to run a smaller scoring set."
+                "Use the check selector to narrow optional scoring checks."
             ),
             suggested_prompts=[f"approve {token}", "show checks"],
             approval_token=token,
@@ -337,8 +335,7 @@ class WorkflowService:
             message=(
                 "I evaluated the customers and ranked the strongest candidates. "
                 f"The top result is {summary[0]['name']} with score {summary[0]['score']} "
-                f"and likelihood {summary[0]['likelihood_pct']}%. "
-                f"Reply 'approve {token}' to plan outreach for the shortlist."
+                f"and likelihood {summary[0]['likelihood_pct']}%."
             ),
             suggested_prompts=[f"approve {token}", "show message styles"],
             approval_token=token,
@@ -367,9 +364,7 @@ class WorkflowService:
             status=ResponseStatus.NEEDS_APPROVAL,
             message=(
                 "Choose a message style before drafting. "
-                f"I recommend '{recommended}'. "
-                f"Reply 'approve {token}' to use it, or reply "
-                f"'approve {token} warm_assisted' to choose a specific tone."
+                f"I recommend '{recommended}'."
             ),
             suggested_prompts=[f"approve {token}", "warm_assisted", "premium_exclusive"],
             approval_token=token,
@@ -395,8 +390,7 @@ class WorkflowService:
             status=ResponseStatus.NEEDS_APPROVAL,
             message=(
                 f"I will use the '{state.chosen_tone_id}' style. "
-                "Drafting uses the Bedrock model adapter and follows the safety rules. "
-                f"Reply 'approve {token}' to generate drafts."
+                "Drafting uses the Bedrock model adapter and follows the safety rules."
             ),
             suggested_prompts=[f"approve {token}", "show message styles"],
             approval_token=token,
@@ -430,8 +424,7 @@ class WorkflowService:
             session_id=state.session_id,
             status=ResponseStatus.NEEDS_APPROVAL,
             message=(
-                f"I drafted {len(state.message_drafts)} messages and kept sensitive triggers out. "
-                f"Reply 'approve {token}' to finalize them."
+                f"I drafted {len(state.message_drafts)} messages and kept sensitive triggers out."
             ),
             suggested_prompts=[f"approve {token}"],
             approval_token=token,
@@ -472,8 +465,7 @@ class WorkflowService:
             session_id=state.session_id,
             status=ResponseStatus.NEEDS_APPROVAL,
             message=(
-                f"I am waiting for approval for '{state.pending_step}'. "
-                f"Reply 'approve {state.approval_token}' to continue."
+                f"I am waiting for approval for '{state.pending_step}'."
             ),
             suggested_prompts=[f"approve {state.approval_token}"],
             approval_token=state.approval_token,

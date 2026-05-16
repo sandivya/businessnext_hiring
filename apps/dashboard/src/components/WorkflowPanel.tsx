@@ -99,7 +99,7 @@ export function WorkflowPanel({
       {response ? (
         <div className={`agent-response ${response.status}`}>
           <span className="status-chip">{response.status.replace("_", " ")}</span>
-          <p>{response.message}</p>
+          <p>{cleanAgentMessage(response.message)}</p>
         </div>
       ) : null}
 
@@ -161,6 +161,14 @@ export function WorkflowPanel({
       </div>
     </section>
   );
+}
+
+function cleanAgentMessage(message: string): string {
+  return message
+    .replace(/\s*Reply 'approve [^']+'[^.]*\./gi, "")
+    .replace(/\s*Reply with `approve [^`]+`[^.]*\./gi, "")
+    .replace(/\s*Approval token:\s*`?[\w-]+`?/gi, "")
+    .trim();
 }
 
 function getWorkflowStage(response: AgentResponse | null): { index: number; action: string; icon: "check" | "file" } {

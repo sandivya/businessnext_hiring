@@ -103,7 +103,7 @@ class MessagingPolicy:
             fallback = self._render_template(template["message"], customer, evaluation)
             # Keep a deterministic safe template as fallback whenever the model is unavailable.
             prompt = self._draft_prompt(customer, evaluation, template, fallback)
-            body = self._redact(self.model.draft(prompt, fallback))
+            body = self._safe_draft_body(self.model.draft(prompt, fallback), fallback)
             drafts.append(
                 MessageDraft(
                     customer_id=evaluation.customer_id,
@@ -196,6 +196,25 @@ class MessagingPolicy:
         for term in self.sensitive_terms:
             redacted = re.sub(term, "planned expenses", redacted, flags=re.IGNORECASE)
         return redacted
+
+    def _safe_draft_body(self, message: str, fallback: str) -> str:
+        redacted = self._redact(message).strip()
+        if self._looks_like_meta_response(redacted):
+            logger.info("Discarded model meta-response and used safe template fallback.")
+            return self._redact(fallback).strip()
+        return redacted or self._redact(fallback).strip()
+
+    def _looks_like_meta_response(self, message: str) -> bool:
+        lowered = message.lower()
+        meta_markers = [
+            "approval token",
+            "approve ",
+            "to proceed",
+            "ready to generate",
+            "receive the final message",
+            "draft generation",
+        ]
+        return any(marker in lowered for marker in meta_markers)
 
     def _safety_notes(self, template: dict[str, Any]) -> list[str]:
         notes = ["Sensitive inferred triggers were not used directly."]

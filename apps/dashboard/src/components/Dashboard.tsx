@@ -8,7 +8,8 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -44,6 +45,7 @@ export function Dashboard() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [catalogView, setCatalogView] = useState<"checks" | "styles" | null>(null);
 
   useEffect(() => {
     void loadInitialData();
@@ -71,6 +73,11 @@ export function Dashboard() {
       }
       setCustomers((await customerResponse.json()).customers);
       setCatalog(await catalogResponse.json());
+      setSelectedIds([]);
+      setActiveCustomer(null);
+      setResponse(null);
+      setEvents([]);
+      setSessionId(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Dashboard data could not be loaded.");
     } finally {
@@ -123,8 +130,8 @@ export function Dashboard() {
     { label: "Customers", value: customers.length, icon: Users },
     { label: "Visible", value: filteredCustomers.length, icon: Database },
     { label: "Selected", value: selectedIds.length, icon: CheckCircle2 },
-    { label: "Checks", value: catalog?.checks.length ?? 0, icon: ListChecks },
-    { label: "Styles", value: catalog?.styles.length ?? 0, icon: MessageSquareText }
+    { label: "Checks", value: catalog?.checks.length ?? 0, icon: ListChecks, action: () => setCatalogView("checks") },
+    { label: "Styles", value: catalog?.styles.length ?? 0, icon: MessageSquareText, action: () => setCatalogView("styles") }
   ];
 
   return (
@@ -143,12 +150,23 @@ export function Dashboard() {
       <section className="metric-strip" aria-label="Dashboard metrics">
         {metrics.map((metric) => {
           const Icon = metric.icon;
-          return (
-            <div className="metric" key={metric.label}>
+          const content = (
+            <>
               <Icon size={18} aria-hidden />
               <span>{metric.label}</span>
               <strong>{metric.value}</strong>
-            </div>
+            </>
+          );
+          return (
+            metric.action ? (
+              <button className="metric metric-button" key={metric.label} onClick={metric.action} type="button">
+                {content}
+              </button>
+            ) : (
+              <div className="metric" key={metric.label}>
+                {content}
+              </div>
+            )
           );
         })}
       </section>
@@ -212,6 +230,59 @@ export function Dashboard() {
         }
         onClose={() => setActiveCustomer(null)}
       />
+      {catalogView ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setCatalogView(null)}>
+          <section
+            className="catalog-dialog"
+            role="dialog"
+            aria-label={catalogView === "checks" ? "Available checks" : "Available message styles"}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <p className="eyebrow">Catalog</p>
+                <h2>{catalogView === "checks" ? "Available checks" : "Message styles"}</h2>
+              </div>
+              <button className="icon-button" onClick={() => setCatalogView(null)} title="Close catalog">
+                <X size={16} aria-hidden />
+              </button>
+            </header>
+            {catalogView === "checks" ? (
+              <div className="catalog-list">
+                {(catalog?.checks ?? []).map((check) => (
+                  <article key={check.rule_id}>
+                    <div>
+                      <strong>{check.rule_id}</strong>
+                      <span className={check.type === "hard_filter" ? "pill warning" : "pill info"}>
+                        {check.type === "hard_filter" ? "Hard filter" : "Scoring"}
+                      </span>
+                    </div>
+                    <h3>{check.name}</h3>
+                    <p>{check.summary}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="catalog-list">
+                {(catalog?.styles ?? []).map((style) => (
+                  <article key={style.tone_id}>
+                    <div>
+                      <strong>{style.display_name}</strong>
+                      <span>{style.tone_id}</span>
+                    </div>
+                    <p>{style.style}</p>
+                    {style.best_for.length > 0 ? (
+                      <div className="inline-tags">
+                        {style.best_for.map((item) => <span key={item}>{item}</span>)}
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

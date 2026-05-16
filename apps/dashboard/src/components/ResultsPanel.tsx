@@ -153,7 +153,7 @@ export function ResultsPanel({ response }: Props) {
                   <span>{draft.channel}</span>
                 </div>
                 {draft.subject ? <h3>{draft.subject}</h3> : null}
-                <p>{draft.body}</p>
+                <p>{cleanDraftBody(draft.body)}</p>
                 <small>{draft.cta}</small>
                 {draft.source_evidence.length > 0 ? (
                   <div className="inline-tags">
@@ -213,4 +213,17 @@ function checksFromFailures(failures: string[]): RuleOutcome[] {
     points: 0,
     reason: failure
   }));
+}
+
+function cleanDraftBody(body: string): string {
+  const lower = body.toLowerCase();
+  if (
+    lower.includes("approval token") ||
+    lower.includes("ready to generate") ||
+    lower.includes("reply with `approve") ||
+    lower.includes("draft generation")
+  ) {
+    return "Draft generation returned workflow instructions instead of customer-ready copy. Regenerate after refreshing the workflow.";
+  }
+  return body;
 }

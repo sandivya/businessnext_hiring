@@ -112,6 +112,21 @@ button:disabled {
   border-radius: 8px;
 }
 
+.metric-button {
+  width: 100%;
+  border: 1px solid var(--line);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.metric-button:hover,
+.metric-button:focus-visible {
+  border-color: var(--blue);
+  background: #eff6ff;
+}
+
 .metric span {
   color: var(--muted);
   font-size: 13px;
@@ -739,6 +754,69 @@ td span {
   display: flex;
   justify-content: flex-end;
   z-index: 20;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(23, 32, 38, 0.34);
+}
+
+.catalog-dialog {
+  width: min(760px, 96vw);
+  max-height: min(760px, 88vh);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.catalog-dialog header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.catalog-dialog h2 {
+  margin: 0;
+}
+
+.catalog-list {
+  display: grid;
+  gap: 10px;
+}
+
+.catalog-list article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.catalog-list article > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.catalog-list h3 {
+  margin: 8px 0 6px;
+  font-size: 14px;
+}
+
+.catalog-list p {
+  margin: 0;
+  color: #435363;
+  line-height: 1.45;
 }
 
 .drawer {

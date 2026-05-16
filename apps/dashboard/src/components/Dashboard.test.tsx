@@ -103,6 +103,50 @@ describe("Dashboard", () => {
     expect(screen.queryByText("Approval requested")).not.toBeInTheDocument();
     vi.unstubAllGlobals();
   });
+
+  it("opens check and style catalogs from the metric strip", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/customers") {
+        return jsonResponse({ customers: [customer] });
+      }
+      if (url === "/api/catalog") {
+        return jsonResponse({
+          checks: [
+            {
+              rule_id: "HF001",
+              name: "Customer consent",
+              type: "hard_filter",
+              summary: "Customer must be contactable."
+            }
+          ],
+          styles: [
+            {
+              tone_id: "formal_rm",
+              display_name: "Formal RM",
+              best_for: ["High value"],
+              style: "Relationship-manager led."
+            }
+          ],
+          fields: {}
+        });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Dashboard />);
+
+    await screen.findByText("Aarav Verma");
+    await userEvent.click(screen.getByRole("button", { name: /Checks\s+1/ }));
+    expect(screen.getByRole("dialog", { name: /Available checks/ })).toBeInTheDocument();
+    expect(screen.getByText("Customer consent")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTitle("Close catalog"));
+    await userEvent.click(screen.getByRole("button", { name: /Styles\s+1/ }));
+    expect(screen.getByRole("dialog", { name: /Available message styles/ })).toBeInTheDocument();
+    expect(screen.getByText("Formal RM")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
 });
 
 function jsonResponse(body: unknown) {
