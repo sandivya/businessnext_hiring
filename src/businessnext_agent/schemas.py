@@ -49,6 +49,7 @@ class AgentPlan(BaseModel):
         "field_catalog",
         "check_catalog",
         "message_style_catalog",
+        "workflow_reset",
         "approval_continuation",
         "campaign_workflow",
     ]

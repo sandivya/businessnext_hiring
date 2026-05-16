@@ -20,6 +20,7 @@ from businessnext_agent.infrastructure.observability import (
 )
 from businessnext_agent.infrastructure.repository import SQLiteStore
 from businessnext_agent.orchestration.agent_tools import build_workflow_tools
+from businessnext_agent.orchestration.bedrock_planner import BedrockPlanner
 from businessnext_agent.orchestration.router import GovernedAgentOrchestrator
 from businessnext_agent.schemas import AgentRequest, AgentResponse, ResponseStatus, WorkflowEvent
 
@@ -113,6 +114,22 @@ def build_orchestrator_agent(settings: Settings, service: WorkflowService) -> An
     return default_strands_agent_factory(settings, build_workflow_tools(service))
 
 
+def build_model_planner(settings: Settings) -> Any | None:
+    """Build a Bedrock-backed planner, or None if disabled or using fake model."""
+
+    if not settings.use_model_planner or settings.use_fake_model:
+        return None
+    try:  # pragma: no cover - AWS integration
+        logger.info("Building Bedrock-backed planner")
+        model = StrandsBedrockMessageModel(lambda: default_strands_agent_factory(settings))
+        return BedrockPlanner(model)
+    except Exception as exc:  # pragma: no cover - AWS integration
+        logger.warning(
+            "Failed to build model planner; will use deterministic fallback: %s", exc
+        )
+        return None
+
+
 def build_service(settings: Settings | None = None) -> WorkflowService:
     """Build the transport-neutral workflow service."""
 
@@ -152,9 +169,13 @@ def invoke(payload: dict[str, Any], service: WorkflowService | None = None) -> d
                     "prompt_length": _prompt_length(payload),
                 },
             )
+            settings = get_settings()
             request = AgentRequest.model_validate(payload)
             active_service = service or build_service()
-            response = GovernedAgentOrchestrator(active_service).handle(request)
+            model_planner = build_model_planner(settings)
+            response = GovernedAgentOrchestrator(active_service, planner=model_planner).handle(
+                request
+            )
             result = response.model_dump(mode="json")
             latency_ms = _elapsed_ms(started_at)
             _attach_observability(result, request_id, trace_id, latency_ms)

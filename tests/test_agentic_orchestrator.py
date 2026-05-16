@@ -83,7 +83,7 @@ def test_orchestrator_uses_validated_fallback_when_planner_fails(service) -> Non
 def test_route_eval_harness(service) -> None:
     result = run_route_evals(GovernedAgentOrchestrator(service))
     assert result["failed"] == 0
-    assert result["total"] >= 7
+    assert result["total"] >= 10
 
 
 def test_route_eval_harness_reports_failures(service, monkeypatch) -> None:
@@ -109,3 +109,32 @@ def test_policy_corrects_tool_mismatch_and_flags_bad_approval() -> None:
     assert validated.tool_name == "run_workflow_prompt"
     assert "tool_intent_mismatch" in validated.risk_flags
     assert "invalid_approval_format" in validated.risk_flags
+
+
+def test_orchestrator_uses_model_planner_when_provided(service) -> None:
+    class TestModelPlanner:
+        def plan(self, request):
+            return AgentPlan(
+                intent="campaign_workflow",
+                tool_name="run_workflow_prompt",
+                prompt="Test campaign",
+                rationale="Model planner generated this.",
+                extracted_filters={"test": True},
+            )
+
+    orchestrator = GovernedAgentOrchestrator(service, planner=TestModelPlanner())
+    plan = orchestrator.plan(AgentRequest(prompt="anything"))
+    assert plan.rationale == "Model planner generated this."
+    assert plan.extracted_filters["test"] is True
+
+
+def test_orchestrator_falls_back_to_deterministic_on_model_planner_failure(service) -> None:
+    class FailingModelPlanner:
+        def plan(self, request):
+            raise RuntimeError("Model unavailable")
+
+    orchestrator = GovernedAgentOrchestrator(service, planner=FailingModelPlanner())
+    plan = orchestrator.plan(AgentRequest(prompt="help"))
+    assert plan.intent == "capability_discovery"
+
+

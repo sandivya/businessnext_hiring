@@ -40,6 +40,13 @@ class DeterministicPlanner:
                 prompt,
                 "Approval turns must continue the governed workflow state machine.",
             )
+        if self._looks_like_reset(prompt_lower):
+            return self._plan(
+                "workflow_reset",
+                "run_workflow_prompt",
+                prompt,
+                "The user is restarting the workflow.",
+            )
         if self._asks_for_fields(prompt_lower):
             return self._plan(
                 "field_catalog",
@@ -89,11 +96,28 @@ class DeterministicPlanner:
     def _looks_like_approval(self, prompt_lower: str) -> bool:
         return bool(re.search(r"\bapprove\s+[a-z0-9-]{4,}\b", prompt_lower))
 
+    def _looks_like_reset(self, prompt_lower: str) -> bool:
+        return any(
+            phrase in prompt_lower
+            for phrase in (
+                "start over",
+                "start again",
+                "new shortlist",
+                "reset",
+                "go back",
+                "restart",
+            )
+        )
+
     def _asks_for_fields(self, prompt_lower: str) -> bool:
         return any(
             phrase in prompt_lower
             for phrase in (
-                "field",
+                "show field",
+                "what field",
+                "available field",
+                "customer field",
+                "data field",
                 "available data",
                 "data do you have",
                 "dataset schema",
@@ -105,13 +129,31 @@ class DeterministicPlanner:
     def _asks_for_checks(self, prompt_lower: str) -> bool:
         return any(
             phrase in prompt_lower
-            for phrase in ("check", "rule", "eligibility", "hard filter", "scoring logic")
+            for phrase in (
+                "show check",
+                "what check",
+                "available check",
+                "show rule",
+                "scoring rule",
+                "eligibility",
+                "hard filter",
+                "scoring logic",
+            )
         )
 
     def _asks_for_message_styles(self, prompt_lower: str) -> bool:
         return any(
             phrase in prompt_lower
-            for phrase in ("message style", "message format", "tone", "outreach style", "template")
+            for phrase in (
+                "message style",
+                "message format",
+                "message tone",
+                "outreach tone",
+                "tone template",
+                "message template",
+                "outreach template",
+                "outreach style",
+            )
         )
 
     def _normalize_campaign_prompt(self, prompt: str) -> str:

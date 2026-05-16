@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     conversation_management_per_turn: bool = True
     log_level: str = "INFO"
     use_fake_model: bool = False
+    use_model_planner: bool = False
 
 
 @lru_cache

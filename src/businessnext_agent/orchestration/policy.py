@@ -12,6 +12,7 @@ INTENT_TOOLS = {
     "field_catalog": "show_customer_field_catalog",
     "check_catalog": "show_available_checks",
     "message_style_catalog": "show_message_styles",
+    "workflow_reset": "run_workflow_prompt",
     "approval_continuation": "run_workflow_prompt",
     "campaign_workflow": "run_workflow_prompt",
 }

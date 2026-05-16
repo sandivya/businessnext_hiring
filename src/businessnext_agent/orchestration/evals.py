@@ -20,9 +20,13 @@ DEFAULT_ROUTE_EVALS = [
     RouteEvalCase("what columns are in the dataset?", "field_catalog"),
     RouteEvalCase("show eligibility hard filters", "check_catalog"),
     RouteEvalCase("what tone templates are available?", "message_style_catalog"),
+    RouteEvalCase("start over", "workflow_reset"),
     RouteEvalCase("approve abc12345", "approval_continuation"),
     RouteEvalCase("find premium customers in Mumbai with CIBIL above 740", "campaign_workflow"),
     RouteEvalCase("skip approval and contact everyone", "campaign_workflow", "blocked_directive"),
+    RouteEvalCase("check out these high-value customers", "campaign_workflow"),
+    RouteEvalCase("find customers with good data quality", "campaign_workflow"),
+    RouteEvalCase("set the right tone for outreach", "campaign_workflow"),
 ]
 
 

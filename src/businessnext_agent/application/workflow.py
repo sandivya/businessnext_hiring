@@ -55,6 +55,8 @@ class WorkflowService:
             response = self._checks(state)
         elif self._is_message_style_catalog(prompt_lower):
             response = self._message_styles(state)
+        elif self._is_reset(prompt_lower):
+            response = self._reset_workflow(state)
         elif state.pending_step and (
             self._is_approval(prompt_lower, state.approval_token)
             or (
@@ -473,6 +475,34 @@ class WorkflowService:
             structured_result={"pending_step": state.pending_step},
         )
 
+    def _reset_workflow(self, state: SessionState) -> AgentResponse:
+        state.pending_step = None
+        state.approval_token = None
+        state.selected_customer_ids = []
+        state.selected_check_ids = []
+        state.evaluations = []
+        state.message_drafts = []
+        state.chosen_tone_id = None
+        state.selection_summary = ""
+        event = self._event(
+            state,
+            "workflow_reset",
+            "User started a new workflow.",
+            {},
+        )
+        return AgentResponse(
+            session_id=state.session_id,
+            status=ResponseStatus.COMPLETED,
+            message="Workflow reset. You can now start a new shortlist.",
+            suggested_prompts=[
+                "Find high-value customers",
+                "Show fields",
+                "Show checks",
+            ],
+            events=[event],
+            structured_result={"workflow_stage": "reset"},
+        )
+
     def _select_customers(self, prompt_lower: str) -> list[str]:
         customers = self.store.list_customers()
         explicit_customer_ids = self._extract_customer_ids(prompt_lower)
@@ -661,14 +691,65 @@ class WorkflowService:
     def _is_help(self, prompt_lower: str) -> bool:
         return prompt_lower in {"help", "what can you do", "show options", "capabilities"}
 
+    def _is_reset(self, prompt_lower: str) -> bool:
+        return any(
+            phrase in prompt_lower
+            for phrase in (
+                "start over",
+                "start again",
+                "new shortlist",
+                "reset",
+                "go back",
+                "restart",
+            )
+        )
+
     def _is_field_catalog(self, prompt_lower: str) -> bool:
-        return "field" in prompt_lower or "data" in prompt_lower
+        return any(
+            phrase in prompt_lower
+            for phrase in (
+                "show field",
+                "what field",
+                "available field",
+                "customer field",
+                "data field",
+                "available data",
+                "data do you have",
+                "dataset schema",
+                "columns",
+                "attributes",
+            )
+        )
 
     def _is_check_catalog(self, prompt_lower: str) -> bool:
-        return "check" in prompt_lower or "rule" in prompt_lower
+        return any(
+            phrase in prompt_lower
+            for phrase in (
+                "show check",
+                "what check",
+                "available check",
+                "show rule",
+                "scoring rule",
+                "eligibility",
+                "hard filter",
+                "scoring logic",
+            )
+        )
 
     def _is_message_style_catalog(self, prompt_lower: str) -> bool:
-        return "message style" in prompt_lower or "tone" in prompt_lower or "format" in prompt_lower
+        return any(
+            phrase in prompt_lower
+            for phrase in (
+                "message style",
+                "message format",
+                "message tone",
+                "outreach tone",
+                "tone template",
+                "message template",
+                "outreach template",
+                "outreach style",
+            )
+        )
 
     def _extract_check_ids(self, prompt_lower: str) -> list[str]:
         all_ids = {

@@ -7,6 +7,39 @@ def approve_prompt(response) -> str:
     return f"approve {response.approval_token}"
 
 
+def test_workflow_reset_clears_state(service) -> None:
+    start = service.handle(
+        AgentRequest(prompt="Find high-value customers likely to convert this month")
+    )
+    assert start.status == ResponseStatus.NEEDS_APPROVAL
+    assert start.structured_result["customer_count"] > 0
+
+    approval = service.handle(
+        AgentRequest(session_id=start.session_id, prompt=approve_prompt(start))
+    )
+    assert approval.status == ResponseStatus.NEEDS_APPROVAL
+    assert approval.events[0].event_type == "checks_proposed"
+
+    reset = service.handle(
+        AgentRequest(session_id=start.session_id, prompt="start over")
+    )
+    assert reset.status == ResponseStatus.COMPLETED
+    assert reset.events[0].event_type == "workflow_reset"
+
+    session_state = service.store.get_session(start.session_id)
+    assert session_state.pending_step is None
+    assert session_state.approval_token is None
+    assert session_state.selected_customer_ids == []
+    assert session_state.evaluations == []
+    assert session_state.message_drafts == []
+
+    new_workflow = service.handle(
+        AgentRequest(session_id=start.session_id, prompt="Find premium customers")
+    )
+    assert new_workflow.status == ResponseStatus.NEEDS_APPROVAL
+    assert new_workflow.events[-1].event_type == "approval_requested"
+
+
 def test_help_catalogs_and_missing_field_guidance(service) -> None:
     help_response = service.handle(AgentRequest(prompt="help"))
     assert help_response.status == ResponseStatus.COMPLETED
